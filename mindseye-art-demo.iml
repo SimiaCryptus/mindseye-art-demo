@@ -237,6 +237,7 @@
     <orderEntry type="library" name="Maven: org.jcuda:jcudnn-natives:windows-x86_64:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcudnn-natives:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcuda-natives:10.0.0" level="project" />
+    <orderEntry type="module" module-name="mindseye-research" />
     <orderEntry type="module" module-name="mindseye-tensorflow" />
     <orderEntry type="module" module-name="tensorflow-model" />
     <orderEntry type="library" name="Maven: org.tensorflow:proto:1.13.1" level="project" />
@@ -245,12 +246,11 @@
     <orderEntry type="library" name="Maven: org.tensorflow:libtensorflow_jni:1.13.1" level="project" />
     <orderEntry type="library" name="Maven: org.tensorflow:libtensorflow_jni_gpu:1.13.1" level="project" />
     <orderEntry type="library" name="Maven: com.google.protobuf:protobuf-java:3.5.1" level="project" />
-    <orderEntry type="module" module-name="mindseye-research" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-aws:2.9.0" level="project" />
+    <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-bundle:1.11.199" level="project" />
     <orderEntry type="module" module-name="sparkbook" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-scala_2.11:2.9.8" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-paranamer:2.9.8" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-aws:2.9.0" level="project" />
-    <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-bundle:1.11.199" level="project" />
     <orderEntry type="library" name="Maven: org.scala-lang:scala-reflect:2.11.12" level="project" />
     <orderEntry type="library" name="Maven: org.lz4:lz4-java:1.5.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-hive_2.11:2.4.0" level="project" />

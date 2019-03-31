@@ -22,7 +22,8 @@ package com.simiacryptus.mindseye.art
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{RMSChannelEnhancer, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.InceptionVision
+import com.simiacryptus.mindseye.art.models.Inception5H
+import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.eval.ArrayTrainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -31,7 +32,7 @@ import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
 import com.simiacryptus.mindseye.opt.orient.{GradientDescent, TrustRegionStrategy}
-import com.simiacryptus.mindseye.opt.region.{RangeConstraint, TrustRegion}
+import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
@@ -72,20 +73,21 @@ abstract class SimpleDeepDream extends InteractiveSetup[Object] {
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
+    pipelineGraphs(log, Inception5H.getVisionPipeline)
+    val network = log.eval(() => {
+      val channelEnhancer = new RMSChannelEnhancer()
+      val contentMatcher = new RMSContentMatcher()
+      MultiPrecision.setPrecision(SumInputsLayer.combine(
+        channelEnhancer.build(Inc5H_1a, contentImage),
+        channelEnhancer.build(Inc5H_2a, contentImage),
+        channelEnhancer.build(Inc5H_3a, contentImage),
+        channelEnhancer.build(Inc5H_3b, contentImage),
+        contentMatcher.build(contentImage)
+      ), Precision.Float).asInstanceOf[PipelineNetwork]
+    })
+    TestUtil.graph(log, network)
     withMonitoredImage(log, contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
-        val network = log.eval(() => {
-          val channelEnhancer = new RMSChannelEnhancer()
-          val contentMatcher = new RMSContentMatcher()
-          MultiPrecision.setPrecision(SumInputsLayer.combine(
-            channelEnhancer.build(InceptionVision.Layer1a.getNetwork, contentImage),
-            channelEnhancer.build(InceptionVision.Layer2a.getNetwork, contentImage),
-            channelEnhancer.build(InceptionVision.Layer3a.getNetwork, contentImage),
-            channelEnhancer.build(InceptionVision.Layer3b.getNetwork, contentImage),
-            contentMatcher.build(new PipelineNetwork, contentImage)
-          ), Precision.Float).asInstanceOf[PipelineNetwork]
-        })
-        graph(log, network)
         log.eval(() => {
           new IterativeTrainer(new ArrayTrainable(Array[Array[Tensor]](Array(contentImage)), network).setMask(true))
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {

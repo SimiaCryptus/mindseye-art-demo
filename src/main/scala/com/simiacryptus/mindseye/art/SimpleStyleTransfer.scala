@@ -25,7 +25,8 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.InceptionVision
+import com.simiacryptus.mindseye.art.models.Inception5H
+import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.eval.ArrayTrainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -56,11 +57,11 @@ package SimpleStyleTransfer {
 
     override def javaProperties: Map[String, String] = Map(
       "spark.master" -> "local[4]",
-      "MAX_TOTAL_MEMORY" -> (8 * CudaMemory.GiB).toString,
-      "MAX_DEVICE_MEMORY" -> (8 * CudaMemory.GiB).toString,
-      "MAX_IO_ELEMENTS" -> (2 * CudaMemory.MiB).toString,
-      "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (1 * 512 * CudaMemory.MiB).toString,
-      "MAX_FILTER_ELEMENTS" -> (1 * 512 * CudaMemory.MiB).toString
+      "MAX_TOTAL_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
+      "MAX_DEVICE_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
+      "MAX_IO_ELEMENTS" -> (1 * CudaMemory.MiB).toString,
+      "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (256 * CudaMemory.MiB).toString,
+      "MAX_FILTER_ELEMENTS" -> (256 * CudaMemory.MiB).toString
     )
 
   }
@@ -89,18 +90,19 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
+    pipelineGraphs(log, Inception5H.getVisionPipeline)
     val network = log.eval(() => {
       val gramMatcher = new GramMatrixMatcher()
       val contentMatcher = new RMSContentMatcher()
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        gramMatcher.build(InceptionVision.Layer1a.getNetwork, styleImage),
-        gramMatcher.build(InceptionVision.Layer2a.getNetwork, styleImage),
-        gramMatcher.build(InceptionVision.Layer3a.getNetwork, styleImage),
-        gramMatcher.build(InceptionVision.Layer3b.getNetwork, styleImage),
-        contentMatcher.build(new PipelineNetwork, contentImage)
+        gramMatcher.build(Inc5H_1a, styleImage),
+        gramMatcher.build(Inc5H_2a, styleImage),
+        gramMatcher.build(Inc5H_3a, styleImage),
+        gramMatcher.build(Inc5H_3b, styleImage),
+        contentMatcher.build(contentImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
-    graph(log, network)
+    TestUtil.graph(log, network)
     withMonitoredImage(log, contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
