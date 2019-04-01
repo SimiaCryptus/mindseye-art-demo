@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
@@ -42,7 +42,7 @@ import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
-object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object SimpleTexture_EC2 extends SimpleTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
   override def inputTimeoutSeconds = 120
 
@@ -61,36 +61,37 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
 
 }
 
-object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
+object SimpleTexture_Local extends SimpleTexture with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 600
 }
 
-abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
+abstract class SimpleTexture extends InteractiveSetup[Object] {
 
-  val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
   val contentResolution = 600
   val styleResolution = 1280
-  val trainingMinutes: Int = 200
-  val trainingIterations: Int = 100
+  val trainingMinutes = 200
+  val trainingIterations = 100
+  val tileSize = 300
 
   override def postConfigure(log: NotebookOutput) = {
     TestUtil.addGlobalHandlers(log.getHttpd)
     log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
     val contentImage = Tensor.fromRGB(log.eval(() => {
-      VisionPipelineUtil.load(contentUrl, contentResolution)
+      Plasma.paint(3,100, 2, contentResolution, contentResolution).toRgbImage
     }))
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
     pipelineGraphs(log, Inception5H.getVisionPipeline)
     val styleNetwork : PipelineNetwork = log.eval(() => {
-      val gramMatcher = new GramMatrixMatcher()
+      val operator = new GramMatrixMatcher().combine(new RMSChannelEnhancer)
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        gramMatcher.build(Inc5H_1a, styleImage),
-        gramMatcher.build(Inc5H_2a, styleImage),
-        gramMatcher.build(Inc5H_3a, styleImage),
-        gramMatcher.build(Inc5H_3b, styleImage)
+        operator.build(Inc5H_2a, styleImage),
+        operator.build(Inc5H_3a, styleImage),
+        operator.scale(1e1).build(Inc5H_3b, styleImage),
+        operator.build(Inc5H_4a, styleImage),
+        operator.build(Inc5H_4b, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
@@ -100,14 +101,9 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
         log.eval(() => {
           val trainable = new TiledTrainable(contentImage) {
             override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-              val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-              styleNetwork.assertAlive()
-              MultiPrecision.setPrecision(SumInputsLayer.combine(
-                styleNetwork.addRef(),
-                new RMSContentMatcher().build(contentTile)
-              ), Precision.Float).asInstanceOf[PipelineNetwork]
+              styleNetwork
             }
-          }.setTileHeight(300).setTileWidth(300).setPadding(5)
+          }.setTileHeight(tileSize).setTileWidth(tileSize).setPadding(5)
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)

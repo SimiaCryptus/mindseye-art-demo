@@ -19,6 +19,9 @@
 
 package com.simiacryptus.mindseye.art
 
+import java.lang
+import java.util.concurrent.TimeUnit
+
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{RMSChannelEnhancer, RMSContentMatcher}
@@ -27,7 +30,7 @@ import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.eval.ArrayTrainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.layers.java.SumInputsLayer
+import com.simiacryptus.mindseye.layers.java.{ImgTileSelectLayer, SumInputsLayer}
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
@@ -40,22 +43,18 @@ import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
-package SimpleDeepDream {
+object SimpleDeepDream_EC2 extends SimpleDeepDream with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
-  object EC2 extends SimpleDeepDream with EC2Runner[Object] with AWSNotebookRunner[Object] {
+  override def inputTimeoutSeconds = 120
 
-    override def inputTimeoutSeconds = 120
+  override def maxHeap = Option("55g")
 
-    override def maxHeap = Option("55g")
+  override def nodeSettings = EC2NodeSettings.P2_XL
 
-    override def nodeSettings = EC2NodeSettings.P2_XL
+}
 
-  }
-
-  object Local extends SimpleDeepDream with LocalRunner[Object] with NotebookRunner[Object] {
-    override def inputTimeoutSeconds = 15
-  }
-
+object SimpleDeepDream_Local extends SimpleDeepDream with LocalRunner[Object] with NotebookRunner[Object] {
+  override def inputTimeoutSeconds = 15
 }
 
 abstract class SimpleDeepDream extends InteractiveSetup[Object] {
@@ -89,16 +88,26 @@ abstract class SimpleDeepDream extends InteractiveSetup[Object] {
     withMonitoredImage(log, contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
-          new IterativeTrainer(new ArrayTrainable(Array[Array[Tensor]](Array(contentImage)), network).setMask(true))
+          val trainable = new TiledTrainable(contentImage) {
+            override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+              val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
+              MultiPrecision.setPrecision(SumInputsLayer.combine(
+                network,
+                new RMSContentMatcher().build(contentTile)
+              ), Precision.Float).asInstanceOf[PipelineNetwork]
+            }
+          }.setTileHeight(300).setTileWidth(300).setPadding(5)
+          new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
             })
             .setMonitor(trainingMonitor)
+            .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-4))
+            .setLineSearchFactory((_: CharSequence) => new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1))
             .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
             .runAndFree
-            .asInstanceOf[java.lang.Double]
+            .asInstanceOf[lang.Double]
         })
       })
     }
