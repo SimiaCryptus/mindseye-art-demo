@@ -27,13 +27,14 @@ import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
-import com.simiacryptus.mindseye.lang.{Layer, Tensor}
+import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
+import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
-import com.simiacryptus.mindseye.opt.orient.{GradientDescent, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
@@ -91,43 +92,77 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
 
-    val trainable = log.eval(() => {
-      def contentOperator = new RMSContentMatcher().scale(contentCoeff)
-      def styleOperator = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(styleMeanCoeff))
+    val colorAdjustmentLayer = new SimpleConvolutionLayer(1, 1, 3, 3)
+    colorAdjustmentLayer.kernel.setByCoord((c:Coordinate)=>{
+      val coords = c.getCoords()(2)
+      if((coords % 3) == (coords / 3)) 1.0 else 0.0
+    })
+
+    val trainable_color = log.eval(() => {
+      def styleMatcher = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(1e0))
+      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), Precision.Float).asInstanceOf[PipelineNetwork]
+      new TiledTrainable(contentImage, colorAdjustmentLayer, tileSize, tilePadding) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = styleNetwork.addRef()
+      }.setMutableCanvas(false)
+    })
+
+    withMonitoredImage(log, ()=>colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
+      withTrainingMonitor(log, trainingMonitor => {
+        log.eval(() => {
+          val search = new BisectionSearch().setCurrentRate(1e0).setMaxRate(1e3).setSpanTol(1e-1)
+          new IterativeTrainer(trainable_color)
+            .setOrientation(new LBFGS())
+            .setMonitor(trainingMonitor)
+            .setTimeout(5, TimeUnit.MINUTES)
+            .setMaxIterations(20)
+            .setLineSearchFactory((_: CharSequence) => search)
+            .setTerminateThreshold(0)
+            .runAndFree
+            .asInstanceOf[lang.Double]
+          colorAdjustmentLayer.freeze()
+        })
+      })
+    }
+
+    val trainable_style = log.eval(() => {
+      def contentMatcher = new RMSContentMatcher().scale(contentCoeff)
+      def styleMatcher = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(styleMeanCoeff))
       def getStyleNetwork(styleImage: Tensor) = {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
-          styleOperator.build(Inc5H_2a, styleImage),
-          styleOperator.build(Inc5H_3a, styleImage),
-          styleOperator.build(Inc5H_3b, styleImage),
-          styleOperator.build(Inc5H_4a, styleImage),
-          styleOperator.build(Inc5H_4b, styleImage),
-          styleOperator.build(Inc5H_4c, styleImage)
+          styleMatcher.build(Inc5H_2a, styleImage),
+          styleMatcher.build(Inc5H_3a, styleImage),
+          styleMatcher.build(Inc5H_3b, styleImage),
+          styleMatcher.build(Inc5H_4a, styleImage),
+          styleMatcher.build(Inc5H_4b, styleImage),
+          styleMatcher.build(Inc5H_4c, styleImage)
         ), Precision.Float).asInstanceOf[PipelineNetwork]
       }
-      def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer = new PipelineNetwork(1)) = {
+      def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer) = {
         val styleNetwork = getStyleNetwork(filter.eval(styleImage).getDataAndFree.getAndFree(0))
         new TiledTrainable(contentImage, filter, tileSize, tilePadding) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-            PipelineNetwork.wrap(1, filter.addRef(),
-              MultiPrecision.setPrecision(SumInputsLayer.combine(
-                styleNetwork.addRef(),
-                contentOperator.build(Inc5H_2a, contentTile),
-                contentOperator.build(Inc5H_3a, contentTile)
-              ), Precision.Float))
+            MultiPrecision.setPrecision(SumInputsLayer.combine(
+              styleNetwork.addRef(),
+              contentMatcher.build(Inc5H_2a, contentTile),
+              contentMatcher.build(Inc5H_3a, contentTile)
+            ), Precision.Float).asInstanceOf[PipelineNetwork]
           }
         }
       }
       new SumTrainable(
-        getTileTrainer(contentImage, styleImage),
-        getTileTrainer(contentImage, styleImage, new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)))
+        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer),
+        getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
+          colorAdjustmentLayer.addRef(),
+          new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)
+        )))
     })
 
-    withMonitoredImage(log, contentImage.toRgbImage) {
+    withMonitoredImage(log, ()=>contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
           val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
-          new IterativeTrainer(trainable)
+          new IterativeTrainer(trainable_style)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(256)
             })
