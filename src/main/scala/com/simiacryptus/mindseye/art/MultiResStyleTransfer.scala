@@ -42,6 +42,7 @@ import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
+import com.simiacryptus.util.JsonUtil
 
 object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -118,8 +119,8 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
             .setLineSearchFactory((_: CharSequence) => search)
             .setTerminateThreshold(0)
             .runAndFree
-            .asInstanceOf[lang.Double]
           colorAdjustmentLayer.freeze()
+          colorAdjustmentLayer.getJson()
         })
       })
     }
@@ -129,12 +130,13 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
       def styleMatcher = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(styleMeanCoeff))
       def getStyleNetwork(styleImage: Tensor) = {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
-          styleMatcher.build(Inc5H_2a, styleImage),
-          styleMatcher.build(Inc5H_3a, styleImage),
-          styleMatcher.build(Inc5H_3b, styleImage),
           styleMatcher.build(Inc5H_4a, styleImage),
           styleMatcher.build(Inc5H_4b, styleImage),
-          styleMatcher.build(Inc5H_4c, styleImage)
+          styleMatcher.build(Inc5H_4c, styleImage),
+          styleMatcher.build(Inc5H_4d, styleImage),
+          styleMatcher.build(Inc5H_4e, styleImage),
+          styleMatcher.build(Inc5H_5a, styleImage),
+          styleMatcher.build(Inc5H_5b, styleImage)
         ), Precision.Float).asInstanceOf[PipelineNetwork]
       }
       def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer) = {
@@ -155,6 +157,10 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
         getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
           colorAdjustmentLayer.addRef(),
           new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)
+        )),
+        getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
+          colorAdjustmentLayer.addRef(),
+          new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(3, 3).setStrideXY(3, 3)
         )))
     })
 
