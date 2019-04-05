@@ -25,12 +25,10 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{RMSChannelEnhancer, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H
 import com.simiacryptus.mindseye.art.models.Inception5H._
-import com.simiacryptus.mindseye.eval.ArrayTrainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.layers.java.{ImgTileSelectLayer, SumInputsLayer}
+import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
@@ -72,7 +70,6 @@ abstract class SimpleDeepDream extends InteractiveSetup[Object] {
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
-    pipelineGraphs(log, Inception5H.getVisionPipeline)
     val network = log.eval(() => {
       val channelEnhancer = new RMSChannelEnhancer()
       val contentMatcher = new RMSContentMatcher()
@@ -88,7 +85,7 @@ abstract class SimpleDeepDream extends InteractiveSetup[Object] {
     withMonitoredImage(log, contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
-          val trainable = new TiledTrainable(contentImage) {
+          val trainable = new TiledTrainable(contentImage, 300, 5) {
             override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
               val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
               MultiPrecision.setPrecision(SumInputsLayer.combine(
@@ -96,7 +93,7 @@ abstract class SimpleDeepDream extends InteractiveSetup[Object] {
                 new RMSContentMatcher().build(contentTile)
               ), Precision.Float).asInstanceOf[PipelineNetwork]
             }
-          }.setTileHeight(300).setTileWidth(300).setPadding(5)
+          }
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)

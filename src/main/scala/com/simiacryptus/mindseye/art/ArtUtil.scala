@@ -34,7 +34,7 @@ object ArtUtil {
 
   def withTrainingMonitor[T](log: NotebookOutput, fn: TrainingMonitor => T) = {
     val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredImage(log, Util.toImage(TestUtil.plot(history))) {
+    NotebookRunner.withMonitoredImage(log, () => Util.toImage(TestUtil.plot(history))) {
       val trainingMonitor = new TrainingMonitor() {
         override def clear(): Unit = {
           super.clear()
@@ -64,7 +64,6 @@ object ArtUtil {
       null
     })
   }
-
 
 
 }

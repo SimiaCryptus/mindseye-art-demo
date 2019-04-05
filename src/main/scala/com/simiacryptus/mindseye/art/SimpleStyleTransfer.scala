@@ -24,12 +24,11 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H
+import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.layers.java.{ImgTileSelectLayer, SumInputsLayer}
+import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
@@ -71,8 +70,13 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
   val contentResolution = 600
   val styleResolution = 1280
-  val trainingMinutes: Int = 200
+  val trainingMinutes: Int = 60
   val trainingIterations: Int = 100
+  val tileSize = 320
+  val tilePadding = 16
+  val maxRate = 5e4
+  val contentCoeff = 1e0
+  val styleMeanCoeff = 1e1
 
   override def postConfigure(log: NotebookOutput) = {
     TestUtil.addGlobalHandlers(log.getHttpd)
@@ -83,31 +87,40 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
-    pipelineGraphs(log, Inception5H.getVisionPipeline)
-    val styleNetwork : PipelineNetwork = log.eval(() => {
-      val gramMatcher = new GramMatrixMatcher()
+    val contentOperator = new RMSContentMatcher().scale(contentCoeff)
+    val styleOperator = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(styleMeanCoeff))
+    val styleNetwork: PipelineNetwork = log.eval(() => {
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        gramMatcher.build(Inc5H_1a, styleImage),
-        gramMatcher.build(Inc5H_2a, styleImage),
-        gramMatcher.build(Inc5H_3a, styleImage),
-        gramMatcher.build(Inc5H_3b, styleImage)
+        styleOperator.build(Inc5H_2a, styleImage),
+        styleOperator.build(Inc5H_3a, styleImage),
+        styleOperator.build(Inc5H_3b, styleImage),
+        styleOperator.build(Inc5H_4a, styleImage),
+        styleOperator.build(Inc5H_4b, styleImage),
+        styleOperator.build(Inc5H_4c, styleImage),
+        styleOperator.build(Inc5H_4d, styleImage),
+        styleOperator.build(Inc5H_4e, styleImage),
+        styleOperator.build(Inc5H_5a, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
     styleNetwork.assertAlive()
     withMonitoredImage(log, contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
+        val trainable = new TiledTrainable(contentImage, tileSize, tilePadding) {
+          override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+            val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
+            styleNetwork.assertAlive()
+            MultiPrecision.setPrecision(SumInputsLayer.combine(
+              styleNetwork.addRef(),
+              contentOperator.build(Inc5H_2a, contentTile),
+              contentOperator.build(Inc5H_3a, contentTile),
+              contentOperator.build(Inc5H_3b, contentTile),
+              contentOperator.build(Inc5H_4a, contentTile)
+            ), Precision.Float).asInstanceOf[PipelineNetwork]
+          }
+        }
         log.eval(() => {
-          val trainable = new TiledTrainable(contentImage) {
-            override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-              val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-              styleNetwork.assertAlive()
-              MultiPrecision.setPrecision(SumInputsLayer.combine(
-                styleNetwork.addRef(),
-                new RMSContentMatcher().build(contentTile)
-              ), Precision.Float).asInstanceOf[PipelineNetwork]
-            }
-          }.setTileHeight(300).setTileWidth(300).setPadding(5)
+          val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
@@ -115,7 +128,9 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
             .setMonitor(trainingMonitor)
             .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1))
+            .setLineSearchFactory((_: CharSequence) => {
+              search
+            })
             .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
             .runAndFree
             .asInstanceOf[lang.Double]

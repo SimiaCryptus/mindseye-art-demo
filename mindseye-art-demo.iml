@@ -248,6 +248,15 @@
     <orderEntry type="library" name="Maven: com.google.protobuf:protobuf-java:3.5.1" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-aws:2.9.0" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-bundle:1.11.199" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco:javacpp:1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5-platform:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:linux-x86:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:linux-x86_64:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:linux-ppc64le:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:macosx-x86_64:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:windows-x86:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:windows-x86_64:1.10.4-1.4.4" level="project" />
+    <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:1.10.4-1.4.4" level="project" />
     <orderEntry type="module" module-name="sparkbook" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-scala_2.11:2.9.8" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-paranamer:2.9.8" level="project" />
