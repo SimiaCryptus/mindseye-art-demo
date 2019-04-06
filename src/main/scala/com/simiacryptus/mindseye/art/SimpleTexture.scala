@@ -99,7 +99,8 @@ abstract class SimpleTexture extends InteractiveSetup[Object] {
         log.eval(() => {
           val trainable = new TiledTrainable(contentImage, tileSize, 5) {
             override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-              styleNetwork
+              regionSelector.freeRef()
+              styleNetwork.addRef()
             }
           }
           new IterativeTrainer(trainable)

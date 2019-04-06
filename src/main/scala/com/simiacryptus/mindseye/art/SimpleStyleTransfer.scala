@@ -61,7 +61,10 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
 }
 
 object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 600
+  override def inputTimeoutSeconds = 15
+  override val contentResolution = 300
+  override val styleResolution = 400
+  override val trainingIterations: Int = 10
 }
 
 abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
@@ -94,12 +97,7 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
         styleOperator.build(Inc5H_2a, styleImage),
         styleOperator.build(Inc5H_3a, styleImage),
         styleOperator.build(Inc5H_3b, styleImage),
-        styleOperator.build(Inc5H_4a, styleImage),
-        styleOperator.build(Inc5H_4b, styleImage),
-        styleOperator.build(Inc5H_4c, styleImage),
-        styleOperator.build(Inc5H_4d, styleImage),
-        styleOperator.build(Inc5H_4e, styleImage),
-        styleOperator.build(Inc5H_5a, styleImage)
+        styleOperator.build(Inc5H_4a, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
@@ -108,6 +106,7 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
       withTrainingMonitor(log, trainingMonitor => {
         val trainable = new TiledTrainable(contentImage, tileSize, tilePadding) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+            regionSelector.freeRef()
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
             styleNetwork.assertAlive()
             MultiPrecision.setPrecision(SumInputsLayer.combine(

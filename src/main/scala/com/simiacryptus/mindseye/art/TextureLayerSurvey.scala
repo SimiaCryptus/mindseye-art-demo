@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
+import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixMatcher, RMSChannelEnhancer}
 import com.simiacryptus.mindseye.art.models.Inception5H
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -65,6 +65,8 @@ object TextureLayerSurvey_EC2 extends TextureLayerSurvey with EC2Runner[Object] 
 
 object TextureLayerSurvey_Local extends TextureLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 600
+  override val contentResolution = 200
+  override val styleResolution = 128
 }
 
 abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
@@ -74,12 +76,12 @@ abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
   val styleResolution = 1280
   val trainingMinutes = 200
   val trainingIterations = 10
-  val tileSize = 300
+  val tileSize = 400
   val tilePadding = 16
   val maxRate = 1e6
-  val rmsComponent = 1e1
+  val rmsComponent = 1e0
   val rmsGain = 1e-1
-  val gramComponent = 1.0
+  val gramComponent = 1e0
 
   override def postConfigure(log: NotebookOutput) = {
     TestUtil.addGlobalHandlers(log.getHttpd)
@@ -102,21 +104,28 @@ abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
       }))
       val operator = new RMSChannelEnhancer().scale(rmsGain)
         .combine(new GramMatrixMatcher().scale(gramComponent))
-        .combine(new RMSChannelEnhancer().scale(rmsComponent))
+        .combine(new ChannelMeanMatcher().scale(rmsComponent))
       val styleNetwork: PipelineNetwork = log.eval(() => {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
           operator.build(layer, styleImage)
         ), Precision.Float).asInstanceOf[PipelineNetwork]
       })
+      val trainable = new TiledTrainable(contentImage, tileSize, tilePadding) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+          regionSelector.freeRef()
+          styleNetwork.addRef()
+        }
+
+        override protected def _free(): Unit = {
+          styleNetwork.freeRef()
+          super._free()
+        }
+      }
+
       withMonitoredImage(log, () => contentImage.toRgbImage) {
         withTrainingMonitor(log, trainingMonitor => {
           Try {
             log.eval(() => {
-              val trainable = new TiledTrainable(contentImage, tileSize, tilePadding) {
-                override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-                  styleNetwork.copy().freeze().asInstanceOf[PipelineNetwork]
-                }
-              }
               val linesearch = new BisectionSearch().setCurrentRate(1e4).setMaxRate(maxRate).setSpanTol(1e-1)
               new IterativeTrainer(trainable)
                 .setOrientation(new TrustRegionStrategy(new GradientDescent) {
@@ -133,7 +142,6 @@ abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
           }
         })
       }
-      styleNetwork.freeRef()
       contentImage.freeRef()
     }
   }

@@ -24,12 +24,12 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
-import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
+import com.simiacryptus.mindseye.layers.cudnn.{ImgModulusPaddingLayer, PoolingLayer}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
@@ -42,7 +42,6 @@ import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
-import com.simiacryptus.util.JsonUtil
 
 object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -64,24 +63,29 @@ object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Ob
 }
 
 object MultiResStyleTransfer_Local extends MultiResStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 600
+  override def inputTimeoutSeconds = 15
+
+  override val styleResolution = 400
+  override val contentResolution = 600
+  override val tileSize = 300
+  override val trainingIterations: Int = 5
 }
 
 abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 600
+  val contentResolution = 800
   val styleResolution = 1280
   val trainingMinutes: Int = 60
   val trainingIterations: Int = 100
-  val tileSize = 320
-  val tilePadding = 16
+  val tileSize = 300
+  val tilePadding = 8
   val maxRate = 1e5
-  val contentCoeff = 1e1
-  val styleMeanCoeff = 1e0
+  val contentCoeff = 1e0
 
   override def postConfigure(log: NotebookOutput) = {
+
     TestUtil.addGlobalHandlers(log.getHttpd)
     log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
 
@@ -93,78 +97,48 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
 
-    val colorAdjustmentLayer = new SimpleConvolutionLayer(1, 1, 3, 3)
-    colorAdjustmentLayer.kernel.setByCoord((c:Coordinate)=>{
-      val coords = c.getCoords()(2)
-      if((coords % 3) == (coords / 3)) 1.0 else 0.0
-    })
-
-    val trainable_color = log.eval(() => {
-      def styleMatcher = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(1e0))
-      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), Precision.Float).asInstanceOf[PipelineNetwork]
-      new TiledTrainable(contentImage, colorAdjustmentLayer, tileSize, tilePadding) {
-        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = styleNetwork.addRef()
-      }.setMutableCanvas(false)
-    })
-
-    withMonitoredImage(log, ()=>colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
-        log.eval(() => {
-          val search = new BisectionSearch().setCurrentRate(1e0).setMaxRate(1e3).setSpanTol(1e-1)
-          new IterativeTrainer(trainable_color)
-            .setOrientation(new LBFGS())
-            .setMonitor(trainingMonitor)
-            .setTimeout(5, TimeUnit.MINUTES)
-            .setMaxIterations(20)
-            .setLineSearchFactory((_: CharSequence) => search)
-            .setTerminateThreshold(0)
-            .runAndFree
-          colorAdjustmentLayer.freeze()
-          colorAdjustmentLayer.getJson()
-        })
-      })
-    }
+    val colorAdjustmentLayer = colorTransfer(log, contentImage, styleImage)
 
     val trainable_style = log.eval(() => {
-      def contentMatcher = new RMSContentMatcher().scale(contentCoeff)
-      def styleMatcher = new GramMatrixMatcher().combine(new ChannelMeanMatcher().scale(styleMeanCoeff))
+      def styleMatcher = new GramMatrixMatcher()
+
       def getStyleNetwork(styleImage: Tensor) = {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
-          styleMatcher.build(Inc5H_4a, styleImage),
-          styleMatcher.build(Inc5H_4b, styleImage),
-          styleMatcher.build(Inc5H_4c, styleImage),
-          styleMatcher.build(Inc5H_4d, styleImage),
-          styleMatcher.build(Inc5H_4e, styleImage),
-          styleMatcher.build(Inc5H_5a, styleImage),
-          styleMatcher.build(Inc5H_5b, styleImage)
+          styleMatcher.build(Inc5H_2a, styleImage),
+          styleMatcher.build(Inc5H_3a, styleImage),
+          styleMatcher.build(Inc5H_3b, styleImage),
+          styleMatcher.build(Inc5H_4a, styleImage)
         ), Precision.Float).asInstanceOf[PipelineNetwork]
       }
-      def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer) = {
+
+      def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer, contentCoeff: Double): TiledTrainable = {
         val styleNetwork = getStyleNetwork(filter.eval(styleImage).getDataAndFree.getAndFree(0))
         new TiledTrainable(contentImage, filter, tileSize, tilePadding) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
+            regionSelector.freeRef()
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               styleNetwork.addRef(),
-              contentMatcher.build(Inc5H_2a, contentTile),
-              contentMatcher.build(Inc5H_3a, contentTile)
+              new RMSContentMatcher().scale(contentCoeff).build(contentTile)
             ), Precision.Float).asInstanceOf[PipelineNetwork]
           }
         }
       }
+
       new SumTrainable(
-        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer),
+        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer.addRef(), contentCoeff / 10),
         getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
           colorAdjustmentLayer.addRef(),
           new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)
-        )),
+        ), contentCoeff),
         getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
           colorAdjustmentLayer.addRef(),
-          new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(3, 3).setStrideXY(3, 3)
-        )))
+          new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(3, 3).setStrideXY(2, 2)
+        ), contentCoeff)
+      )
     })
 
-    withMonitoredImage(log, ()=>contentImage.toRgbImage) {
+    withMonitoredImage(log, () => contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
           val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
@@ -182,6 +156,44 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
         })
       })
     }
+  }
+
+  def colorTransfer(log: NotebookOutput, contentImage: Tensor, styleImage: Tensor) = {
+    val colorAdjustmentLayer = new SimpleConvolutionLayer(1, 1, 3, 3)
+    colorAdjustmentLayer.kernel.setByCoord((c: Coordinate) => {
+      val coords = c.getCoords()(2)
+      if ((coords % 3) == (coords / 3)) 1.0 else 0.0
+    })
+
+    val trainable_color = log.eval(() => {
+      def styleMatcher = new GramMatrixMatcher() //.combine(new ChannelMeanMatcher().scale(1e0))
+      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), Precision.Float).asInstanceOf[PipelineNetwork]
+      new TiledTrainable(contentImage, colorAdjustmentLayer, tileSize, tilePadding) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+          regionSelector.freeRef()
+          styleNetwork.addRef()
+        }
+      }.setMutableCanvas(false)
+    })
+
+    withMonitoredImage(log, () => colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
+      withTrainingMonitor(log, trainingMonitor => {
+        log.eval(() => {
+          val search = new BisectionSearch().setCurrentRate(1e0).setMaxRate(1e3).setSpanTol(1e-3)
+          new IterativeTrainer(trainable_color)
+            .setOrientation(new LBFGS())
+            .setMonitor(trainingMonitor)
+            .setTimeout(5, TimeUnit.MINUTES)
+            .setMaxIterations(20)
+            .setLineSearchFactory((_: CharSequence) => search)
+            .setTerminateThreshold(0)
+            .runAndFree
+          colorAdjustmentLayer.freeze()
+          colorAdjustmentLayer.getJson()
+        })
+      })
+    }
+    colorAdjustmentLayer
   }
 
 }

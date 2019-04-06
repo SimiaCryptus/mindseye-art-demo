@@ -24,8 +24,9 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{RMSChannelEnhancer, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H._
+import com.simiacryptus.mindseye.art.constraints.RMSChannelEnhancer
+import com.simiacryptus.mindseye.art.models.Inception5H
+import com.simiacryptus.mindseye.eval.Trainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
@@ -58,56 +59,50 @@ object SimpleDeepDream_Local extends SimpleDeepDream with LocalRunner[Object] wi
 abstract class SimpleDeepDream extends InteractiveSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
-  val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
   val contentResolution = 600
-  val styleResolution = 1280
-  val trainingMinutes: Int = 200
-  val trainingIterations: Int = 100
+  val trainingMinutes: Int = 20
+  val trainingIterations: Int = 15
+  val tileSize = 400
 
   override def postConfigure(log: NotebookOutput) = {
     TestUtil.addGlobalHandlers(log.getHttpd)
     log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
-    val contentImage = Tensor.fromRGB(log.eval(() => {
+    var contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
-    val network = log.eval(() => {
+    val trainable: Trainable = log.eval(() => {
+      def precision = Precision.Float
       val channelEnhancer = new RMSChannelEnhancer()
-      val contentMatcher = new RMSContentMatcher()
-      MultiPrecision.setPrecision(SumInputsLayer.combine(
-        channelEnhancer.build(Inc5H_1a, contentImage),
-        channelEnhancer.build(Inc5H_2a, contentImage),
-        channelEnhancer.build(Inc5H_3a, contentImage),
-        channelEnhancer.build(Inc5H_3b, contentImage),
-        contentMatcher.build(contentImage)
-      ), Precision.Float).asInstanceOf[PipelineNetwork]
+      val network = MultiPrecision.setPrecision(SumInputsLayer.combine(
+        channelEnhancer.build(Inception5H.Inc5H_4e, contentImage),
+        channelEnhancer.build(Inception5H.Inc5H_5a, contentImage),
+        channelEnhancer.build(Inception5H.Inc5H_5b, contentImage)
+      ), precision).asInstanceOf[PipelineNetwork]
+      new TiledTrainable(contentImage.copy(), new PipelineNetwork(1), tileSize, 16, precision) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+          regionSelector.freeRef()
+          network.addRef()
+        }
+      }
     })
-    TestUtil.graph(log, network)
-    withMonitoredImage(log, contentImage.toRgbImage) {
+    withMonitoredImage(log, () => contentImage.copy().toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
-          val trainable = new TiledTrainable(contentImage, 300, 5) {
-            override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-              val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-              MultiPrecision.setPrecision(SumInputsLayer.combine(
-                network,
-                new RMSContentMatcher().build(contentTile)
-              ), Precision.Float).asInstanceOf[PipelineNetwork]
-            }
-          }
-          new IterativeTrainer(trainable)
+          val search = new BisectionSearch().setCurrentRate(1e0).setSpanTol(1e-1)
+          IterativeTrainer.wrap(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
-              override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
+              override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(255)
             })
             .setMonitor(trainingMonitor)
             .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1))
+            .setLineSearchFactory((_: CharSequence) => search)
             .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
             .runAndFree
             .asInstanceOf[lang.Double]
         })
       })
     }
+    null
   }
-
 }
