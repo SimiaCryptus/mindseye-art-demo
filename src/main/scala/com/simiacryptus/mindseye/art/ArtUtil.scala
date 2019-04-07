@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
+import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.CudaSystem
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.{Step, TrainingMonitor}
@@ -35,7 +36,7 @@ import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.NotebookRunner
 import com.simiacryptus.sparkbook.util.Java8Util._
-import com.simiacryptus.util.Util
+import com.simiacryptus.util.{FastRandom, Util}
 import javax.imageio.ImageIO
 import org.slf4j.LoggerFactory
 
@@ -77,5 +78,20 @@ object ArtUtil {
     })
   }
 
+  def load(log: NotebookOutput, contentImage: Tensor, url: String) = {
+    url match {
+      case "plasma" => Tensor.fromRGB(log.eval(() => {
+        val contentDims = contentImage.getDimensions()
+        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
+      }))
+      case "noise" => Tensor.fromRGB(log.eval(() => {
+        contentImage.map((v: Double) => FastRandom.INSTANCE.random() * 100).toRgbImage
+      }))
+      case _ => Tensor.fromRGB(log.eval(() => {
+        val contentDims = contentImage.getDimensions()
+        VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
+      }))
+    }
+  }
 
 }

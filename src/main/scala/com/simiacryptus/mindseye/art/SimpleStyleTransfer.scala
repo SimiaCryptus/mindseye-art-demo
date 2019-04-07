@@ -83,19 +83,7 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
-    val canvasImage = inputUrl match {
-      case "plasma" => Tensor.fromRGB(log.eval(() => {
-        val contentDims = contentImage.getDimensions()
-        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
-      }))
-      case "noise" => Tensor.fromRGB(log.eval(() => {
-        contentImage.map((v:Double)=>FastRandom.INSTANCE.random()*100).toRgbImage
-      }))
-      case _ => Tensor.fromRGB(log.eval(() => {
-        val contentDims = contentImage.getDimensions()
-        VisionPipelineUtil.load(inputUrl, contentDims(0), contentDims(1))
-      }))
-    }
+    val canvasImage = load(log, contentImage, inputUrl)
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
@@ -121,7 +109,6 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
           }
         }
         log.eval(() => {
-          //val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
           val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new LBFGS) {
