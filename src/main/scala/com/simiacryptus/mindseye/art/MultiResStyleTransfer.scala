@@ -52,12 +52,7 @@ object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Ob
   override def nodeSettings = EC2NodeSettings.P2_XL
 
   override def javaProperties: Map[String, String] = Map(
-    "spark.master" -> "local[4]",
-    "MAX_TOTAL_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
-    "MAX_DEVICE_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
-    "MAX_IO_ELEMENTS" -> (1 * CudaMemory.MiB).toString,
-    "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (256 * CudaMemory.MiB).toString,
-    "MAX_FILTER_ELEMENTS" -> (256 * CudaMemory.MiB).toString
+    "spark.master" -> "local[4]"
   )
 
 }

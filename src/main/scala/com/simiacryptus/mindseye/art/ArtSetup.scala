@@ -24,21 +24,31 @@ import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.{InteractiveSetup, RepeatedInteractiveSetup}
 
 trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
+  def cudaLog = false
+
+  def maxImageSize = 10000
+
+  val label = "Demo"
 
   override def apply(log: NotebookOutput): T = {
     TestUtil.addGlobalHandlers(log.getHttpd)
-    VisionPipelineUtil.cudaReports(log,true)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
+    VisionPipelineUtil.cudaReports(log, cudaLog)
+    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(maxImageSize)
     super.apply(log)
   }
 }
 
 trait RepeatedArtSetup[T <: AnyRef] extends RepeatedInteractiveSetup[T] {
+  def cudaLog = false
+
+  def maxImageSize = 10000
+
+  val label = "Demo"
 
   override def apply(log: NotebookOutput): T = {
     TestUtil.addGlobalHandlers(log.getHttpd)
-    VisionPipelineUtil.cudaReports(log,true)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
+    VisionPipelineUtil.cudaReports(log, cudaLog)
+    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(maxImageSize)
     super.apply(log)
   }
 }

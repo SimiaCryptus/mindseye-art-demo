@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
+import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
 import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -44,7 +44,7 @@ import com.simiacryptus.sparkbook.util.LocalRunner
 import scala.collection.JavaConversions._
 import scala.util.Try
 
-object TextureLayerSurvey_EC2 extends TextureLayerSurvey with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object DreamLayerSurvey_EC2 extends DreamLayerSurvey with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
   override def inputTimeoutSeconds = 120
 
@@ -58,16 +58,14 @@ object TextureLayerSurvey_EC2 extends TextureLayerSurvey with EC2Runner[Object] 
 
 }
 
-object TextureLayerSurvey_Local extends TextureLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
+object DreamLayerSurvey_Local extends DreamLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 256
-  override val styleResolution = 256
   override def inputTimeoutSeconds = 600
 }
 
-abstract class TextureLayerSurvey extends ArtSetup[Object] {
-  val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
+abstract class DreamLayerSurvey extends ArtSetup[Object] {
+  val imageUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val contentResolution = 512
-  val styleResolution = 512
   val trainingMinutes = 30
   val trainingIterations = 20
   val tileSize = 512
@@ -76,35 +74,27 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
   def precision = Precision.Double
 
   override def postConfigure(log: NotebookOutput) = {
-    val styleImage: Tensor = Tensor.fromRGB(log.eval(() => {
-      VisionPipelineUtil.load(styleUrl, styleResolution)
-    }))
-    survey(log, styleImage, Inception5H.getVisionPipeline)
-    survey(log, styleImage, VGG19.getVisionPipeline)
-    survey(log, styleImage, VGG16.getVisionPipeline)
+    survey(log, Inception5H.getVisionPipeline)
+    survey(log, VGG19.getVisionPipeline)
+    survey(log, VGG16.getVisionPipeline)
     null
   }
 
-  def survey(log: NotebookOutput, styleImage: Tensor, pipeline: VisionPipeline[_ <: VisionPipelineLayer]): Unit = {
+  def survey(log: NotebookOutput, pipeline: VisionPipeline[_ <: VisionPipelineLayer]): Unit = {
     log.h1(pipeline.name)
     for (layer <- pipeline.getLayers.keySet()) {
       log.h2(layer.name())
       TestUtil.graph(log, layer.getLayer.asInstanceOf[PipelineNetwork])
-      survey(log, styleImage, layer)
+      survey(log, layer)
     }
   }
 
-  def survey(log: NotebookOutput, styleImage: Tensor, layer: VisionPipelineLayer) = {
-    val contentImage = Tensor.fromRGB(log.eval(() => {
-      val tensor = new Plasma().paint(contentResolution, contentResolution)
-      val toRgbImage = tensor.toRgbImage
-      tensor.freeRef()
-      toRgbImage
-    }))
-    val operator = new GramMatrixMatcher()
+  def survey(log: NotebookOutput, layer: VisionPipelineLayer): Unit = {
+    val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(imageUrl, contentResolution))
+    val operator = new RMSChannelEnhancer
     val styleNetwork: PipelineNetwork = log.eval(() => {
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        operator.build(layer, styleImage)
+        operator.build(layer, contentImage)
       ), precision).freeze().asInstanceOf[PipelineNetwork]
     })
     val trainable = new TiledTrainable(contentImage, tileSize, tilePadding, precision) {

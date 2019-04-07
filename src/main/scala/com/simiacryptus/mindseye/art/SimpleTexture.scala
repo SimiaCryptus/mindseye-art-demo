@@ -26,6 +26,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
 import com.simiacryptus.mindseye.art.models.Inception5H._
+import com.simiacryptus.mindseye.art.models.VGG19
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
@@ -50,12 +51,7 @@ object SimpleTexture_EC2 extends SimpleTexture with EC2Runner[Object] with AWSNo
   override def nodeSettings = EC2NodeSettings.P2_XL
 
   override def javaProperties: Map[String, String] = Map(
-    "spark.master" -> "local[4]",
-    "MAX_TOTAL_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
-    "MAX_DEVICE_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
-    "MAX_IO_ELEMENTS" -> (1 * CudaMemory.MiB).toString,
-    "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (256 * CudaMemory.MiB).toString,
-    "MAX_FILTER_ELEMENTS" -> (256 * CudaMemory.MiB).toString
+    "spark.master" -> "local[4]"
   )
 
 }
@@ -86,10 +82,9 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
     val styleNetwork: PipelineNetwork = log.eval(() => {
       val operator = new GramMatrixMatcher()
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        operator.build(Inc5H_2a, styleImage),
-        operator.build(Inc5H_3a, styleImage),
-        operator.build(Inc5H_3b, styleImage),
-        operator.build(Inc5H_4a, styleImage)
+        operator.build(VGG19.VGG19_1b, styleImage),
+        operator.build(VGG19.VGG19_2a, styleImage),
+        operator.build(VGG19.VGG19_3a, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
