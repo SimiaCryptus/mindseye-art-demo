@@ -32,7 +32,7 @@ import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.BisectionSearch
-import com.simiacryptus.mindseye.opt.orient.{GradientDescent, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
@@ -43,7 +43,7 @@ import com.simiacryptus.sparkbook.util.LocalRunner
 
 object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
-  override def inputTimeoutSeconds = 120
+  override def inputTimeoutSeconds = 600
 
   override def maxHeap = Option("55g")
 
@@ -53,39 +53,41 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
     "spark.master" -> "local[4]",
     "MAX_TOTAL_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
     "MAX_DEVICE_MEMORY" -> (7.5 * CudaMemory.GiB).toString,
-    "MAX_IO_ELEMENTS" -> (1 * CudaMemory.MiB).toString,
-    "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (256 * CudaMemory.MiB).toString,
-    "MAX_FILTER_ELEMENTS" -> (256 * CudaMemory.MiB).toString
+    "MAX_IO_ELEMENTS" -> (2 * CudaMemory.MiB).toString,
+    "CONVOLUTION_WORKSPACE_SIZE_LIMIT" -> (512 * CudaMemory.MiB).toString,
+    "MAX_FILTER_ELEMENTS" -> (512 * CudaMemory.MiB).toString
   )
 
 }
 
 object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 15
   override val contentResolution = 300
   override val styleResolution = 400
   override val trainingIterations: Int = 10
+  override def inputTimeoutSeconds = 60
 }
 
-abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
+abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
+  val inputUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 600
+  val contentResolution = 512
   val styleResolution = 1280
-  val trainingMinutes: Int = 60
-  val trainingIterations: Int = 100
-  val tileSize = 320
-  val tilePadding = 16
-  val maxRate = 5e4
-  val contentCoeff = 1e0
-  val styleMeanCoeff = 1e1
+  val trainingMinutes: Int = 30
+  val trainingIterations: Int = 10
+  val tileSize = 512
+  val tilePadding = 8
+  val maxRate = 1e5
+  val contentCoeff = 1e-4
+  val styleMeanCoeff = 1e0
 
   override def postConfigure(log: NotebookOutput) = {
-    TestUtil.addGlobalHandlers(log.getHttpd)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
+    }))
+    val canvasImage = Tensor.fromRGB(log.eval(() => {
+      VisionPipelineUtil.load(inputUrl, contentResolution)
     }))
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
@@ -100,28 +102,22 @@ abstract class SimpleStyleTransfer extends InteractiveSetup[Object] {
         styleOperator.build(Inc5H_4a, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
-    TestUtil.graph(log, styleNetwork)
-    styleNetwork.assertAlive()
-    withMonitoredImage(log, contentImage.toRgbImage) {
+    withMonitoredImage(log, canvasImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
-        val trainable = new TiledTrainable(contentImage, tileSize, tilePadding) {
+        val trainable = new TiledTrainable(canvasImage, tileSize, tilePadding) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-            regionSelector.freeRef()
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-            styleNetwork.assertAlive()
+            regionSelector.freeRef()
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               styleNetwork.addRef(),
-              contentOperator.build(Inc5H_2a, contentTile),
-              contentOperator.build(Inc5H_3a, contentTile),
-              contentOperator.build(Inc5H_3b, contentTile),
-              contentOperator.build(Inc5H_4a, contentTile)
+              contentOperator.build(Inc5H_3a, contentTile)
             ), Precision.Float).asInstanceOf[PipelineNetwork]
           }
         }
         log.eval(() => {
           val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
           new IterativeTrainer(trainable)
-            .setOrientation(new TrustRegionStrategy(new GradientDescent) {
+            .setOrientation(new TrustRegionStrategy(new LBFGS) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
             })
             .setMonitor(trainingMonitor)

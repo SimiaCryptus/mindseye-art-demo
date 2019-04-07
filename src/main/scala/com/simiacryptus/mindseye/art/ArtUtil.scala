@@ -19,13 +19,25 @@
 
 package com.simiacryptus.mindseye.art
 
+import java.awt.image.BufferedImage
+import java.io.{IOException, OutputStream, PrintStream, PrintWriter}
+import java.text.SimpleDateFormat
+import java.util.{Date, UUID}
+import java.util.concurrent.TimeUnit
+
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.AppenderBase
+import com.simiacryptus.mindseye.lang.cudnn.CudaSystem
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.{Step, TrainingMonitor}
 import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
-import com.simiacryptus.notebook.NotebookOutput
+import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.NotebookRunner
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.util.Util
+import javax.imageio.ImageIO
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer

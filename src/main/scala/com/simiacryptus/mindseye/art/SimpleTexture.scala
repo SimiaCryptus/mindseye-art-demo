@@ -62,34 +62,34 @@ object SimpleTexture_EC2 extends SimpleTexture with EC2Runner[Object] with AWSNo
 
 object SimpleTexture_Local extends SimpleTexture with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 600
+
+  override val contentResolution = 300
+  override val styleResolution = 600
 }
 
-abstract class SimpleTexture extends InteractiveSetup[Object] {
+abstract class SimpleTexture extends RepeatedArtSetup[Object] {
 
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 600
+  val contentResolution = 512
   val styleResolution = 1280
-  val trainingMinutes = 200
-  val trainingIterations = 100
+  val trainingMinutes = 60
+  val trainingIterations = 10
   val tileSize = 300
 
   override def postConfigure(log: NotebookOutput) = {
-    TestUtil.addGlobalHandlers(log.getHttpd)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
     val contentImage = Tensor.fromRGB(log.eval(() => {
-      Plasma.paint(3, 100, 2, contentResolution, contentResolution).toRgbImage
+      new Plasma().paint(contentResolution, contentResolution).toRgbImage
     }))
     val styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
     val styleNetwork: PipelineNetwork = log.eval(() => {
-      val operator = new GramMatrixMatcher().combine(new RMSChannelEnhancer)
+      val operator = new GramMatrixMatcher()
       MultiPrecision.setPrecision(SumInputsLayer.combine(
         operator.build(Inc5H_2a, styleImage),
         operator.build(Inc5H_3a, styleImage),
-        operator.scale(1e1).build(Inc5H_3b, styleImage),
-        operator.build(Inc5H_4a, styleImage),
-        operator.build(Inc5H_4b, styleImage)
+        operator.build(Inc5H_3b, styleImage),
+        operator.build(Inc5H_4a, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
@@ -103,6 +103,7 @@ abstract class SimpleTexture extends InteractiveSetup[Object] {
               styleNetwork.addRef()
             }
           }
+          val search = new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1)
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new GradientDescent) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
@@ -110,7 +111,7 @@ abstract class SimpleTexture extends InteractiveSetup[Object] {
             .setMonitor(trainingMonitor)
             .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1))
+            .setLineSearchFactory((_: CharSequence) => search)
             .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
             .runAndFree
             .asInstanceOf[lang.Double]

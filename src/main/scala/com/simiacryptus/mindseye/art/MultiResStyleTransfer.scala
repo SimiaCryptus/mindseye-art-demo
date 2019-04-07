@@ -28,8 +28,8 @@ import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentM
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
+import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
-import com.simiacryptus.mindseye.layers.cudnn.{ImgModulusPaddingLayer, PoolingLayer}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
@@ -63,15 +63,17 @@ object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Ob
 }
 
 object MultiResStyleTransfer_Local extends MultiResStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 15
-
   override val styleResolution = 400
   override val contentResolution = 600
   override val tileSize = 300
   override val trainingIterations: Int = 5
+
+  override def inputTimeoutSeconds = 15
 }
 
-abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
+
+
+abstract class MultiResStyleTransfer extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
@@ -85,9 +87,6 @@ abstract class MultiResStyleTransfer extends InteractiveSetup[Object] {
   val contentCoeff = 1e0
 
   override def postConfigure(log: NotebookOutput) = {
-
-    TestUtil.addGlobalHandlers(log.getHttpd)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
 
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)

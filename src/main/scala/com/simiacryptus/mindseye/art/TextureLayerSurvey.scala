@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixMatcher, RMSChannelEnhancer}
-import com.simiacryptus.mindseye.art.models.Inception5H
+import com.simiacryptus.mindseye.art.models.{Inception5H, VGG19}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer
@@ -64,47 +64,36 @@ object TextureLayerSurvey_EC2 extends TextureLayerSurvey with EC2Runner[Object] 
 }
 
 object TextureLayerSurvey_Local extends TextureLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 600
   override val contentResolution = 200
   override val styleResolution = 128
+  override def inputTimeoutSeconds = 600
 }
 
-abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
-
+abstract class TextureLayerSurvey extends ArtSetup[Object] {
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 400
+  val contentResolution = 512
   val styleResolution = 1280
   val trainingMinutes = 200
   val trainingIterations = 10
-  val tileSize = 400
+  val tileSize = 512
   val tilePadding = 16
   val maxRate = 1e6
-  val rmsComponent = 1e0
-  val rmsGain = 1e-1
-  val gramComponent = 1e0
+  val rmsGain = 1e-4
 
   override def postConfigure(log: NotebookOutput) = {
-    TestUtil.addGlobalHandlers(log.getHttpd)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
     val styleImage: Tensor = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
-    survey(log, Inception5H.getVisionPipeline, styleImage)
-    null
-  }
-
-  private def survey(log: NotebookOutput, pipeline: VisionPipeline[Inception5H], styleImage: Tensor) = {
-    for ((layer: Inception5H) <- pipeline.getLayers.keySet()) {
+    val pipeline = VGG19.getVisionPipeline
+    for (layer <- pipeline.getLayers.keySet()) {
       log.h2(layer.name())
       val contentImage = Tensor.fromRGB(log.eval(() => {
-        val tensor = Plasma.paint(3, 100, 2.1, contentResolution, contentResolution)
+        val tensor = new Plasma().paint(contentResolution, contentResolution)
         val toRgbImage = tensor.toRgbImage
         tensor.freeRef()
         toRgbImage
       }))
-      val operator = new RMSChannelEnhancer().scale(rmsGain)
-        .combine(new GramMatrixMatcher().scale(gramComponent))
-        .combine(new ChannelMeanMatcher().scale(rmsComponent))
+      val operator = new GramMatrixMatcher()
       val styleNetwork: PipelineNetwork = log.eval(() => {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
           operator.build(layer, styleImage)
@@ -144,5 +133,6 @@ abstract class TextureLayerSurvey extends InteractiveSetup[Object] {
       }
       contentImage.freeRef()
     }
+    null
   }
 }

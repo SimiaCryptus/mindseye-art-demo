@@ -56,22 +56,21 @@ object SimpleDeepDream_Local extends SimpleDeepDream with LocalRunner[Object] wi
   override def inputTimeoutSeconds = 15
 }
 
-abstract class SimpleDeepDream extends InteractiveSetup[Object] {
+abstract class SimpleDeepDream extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
-  val contentResolution = 600
-  val trainingMinutes: Int = 20
+  val contentResolution = 512
+  val trainingMinutes: Int = 30
   val trainingIterations: Int = 15
-  val tileSize = 400
+  val tileSize = 512
 
   override def postConfigure(log: NotebookOutput) = {
-    TestUtil.addGlobalHandlers(log.getHttpd)
-    log.asInstanceOf[MarkdownNotebookOutput].setMaxImageSize(10000)
     var contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
     val trainable: Trainable = log.eval(() => {
       def precision = Precision.Float
+
       val channelEnhancer = new RMSChannelEnhancer()
       val network = MultiPrecision.setPrecision(SumInputsLayer.combine(
         channelEnhancer.build(Inception5H.Inc5H_4e, contentImage),
