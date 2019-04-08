@@ -26,7 +26,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
-import com.simiacryptus.mindseye.art.models.VGG19.{VGG19_1a, VGG19_1b, VGG19_1c}
+import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
@@ -98,9 +98,9 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
           styleOperator.build(Inc5H_1a, styleImage),
           styleOperator.build(Inc5H_2a, styleImage),
           styleOperator.build(Inc5H_3b, styleImage),
-          styleOperator.build(VGG19_1a, styleImage),
-          styleOperator.build(VGG19_1b, styleImage),
-          styleOperator.build(VGG19_1c, styleImage)
+          styleOperator.build(VGG19_1a1, styleImage),
+          styleOperator.build(VGG19_1b1, styleImage),
+          styleOperator.build(VGG19_1c1, styleImage)
         ), precision).asInstanceOf[PipelineNetwork]
       }
 
@@ -112,7 +112,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
             regionSelector.freeRef()
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               styleNetwork.addRef(),
-              new RMSContentMatcher().scale(contentCoeff).build(VGG19_1c, contentTile)
+              new RMSContentMatcher().scale(contentCoeff).build(VGG19_1c1, contentTile)
             ), precision).asInstanceOf[PipelineNetwork]
           }
         }

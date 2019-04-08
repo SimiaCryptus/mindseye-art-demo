@@ -87,9 +87,9 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
         styleOperator.build(Inc5H_1a, styleImage),
         styleOperator.build(Inc5H_2a, styleImage),
         styleOperator.build(Inc5H_3b, styleImage),
-        styleOperator.build(VGG19_1a, styleImage),
-        styleOperator.build(VGG19_1b, styleImage),
-        styleOperator.build(VGG19_1c, styleImage)
+        styleOperator.build(VGG19_1a1, styleImage),
+        styleOperator.build(VGG19_1b1, styleImage),
+        styleOperator.build(VGG19_1c1, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
