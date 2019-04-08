@@ -26,6 +26,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
+import com.simiacryptus.mindseye.art.models.VGG19.{VGG19_1a, VGG19_1b, VGG19_1c}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
@@ -33,7 +34,7 @@ import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
-import com.simiacryptus.mindseye.opt.line.BisectionSearch
+import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, BisectionSearch}
 import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
@@ -58,11 +59,6 @@ object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Ob
 }
 
 object MultiResStyleTransfer_Local extends MultiResStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override val styleResolution = 400
-  override val contentResolution = 600
-  override val tileSize = 300
-  override val trainingIterations: Int = 5
-
   override def inputTimeoutSeconds = 15
 }
 
@@ -72,14 +68,15 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 800
-  val styleResolution = 1280
-  val trainingMinutes: Int = 60
-  val trainingIterations: Int = 100
-  val tileSize = 300
+  val contentResolution = 1024
+  val styleResolution = 1024
+  val trainingMinutes: Int = 30
+  val trainingIterations: Int = 50
+  val tileSize = 512
   val tilePadding = 8
-  val maxRate = 1e5
-  val contentCoeff = 1e0
+  val maxRate = 1e10
+  val contentCoeff = 1e-4
+  val precision = Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
 
@@ -94,33 +91,35 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
     val colorAdjustmentLayer = colorTransfer(log, contentImage, styleImage)
 
     val trainable_style = log.eval(() => {
-      def styleMatcher = new GramMatrixMatcher()
+      def styleOperator = new GramMatrixMatcher()
 
       def getStyleNetwork(styleImage: Tensor) = {
         MultiPrecision.setPrecision(SumInputsLayer.combine(
-          styleMatcher.build(Inc5H_2a, styleImage),
-          styleMatcher.build(Inc5H_3a, styleImage),
-          styleMatcher.build(Inc5H_3b, styleImage),
-          styleMatcher.build(Inc5H_4a, styleImage)
-        ), Precision.Float).asInstanceOf[PipelineNetwork]
+          styleOperator.build(Inc5H_1a, styleImage),
+          styleOperator.build(Inc5H_2a, styleImage),
+          styleOperator.build(Inc5H_3b, styleImage),
+          styleOperator.build(VGG19_1a, styleImage),
+          styleOperator.build(VGG19_1b, styleImage),
+          styleOperator.build(VGG19_1c, styleImage)
+        ), precision).asInstanceOf[PipelineNetwork]
       }
 
       def getTileTrainer(contentImage: Tensor, styleImage: Tensor, filter: Layer, contentCoeff: Double): TiledTrainable = {
         val styleNetwork = getStyleNetwork(filter.eval(styleImage).getDataAndFree.getAndFree(0))
-        new TiledTrainable(contentImage, filter, tileSize, tilePadding) {
+        new TiledTrainable(contentImage, filter, tileSize, tilePadding, precision) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
             regionSelector.freeRef()
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               styleNetwork.addRef(),
-              new RMSContentMatcher().scale(contentCoeff).build(contentTile)
-            ), Precision.Float).asInstanceOf[PipelineNetwork]
+              new RMSContentMatcher().scale(contentCoeff).build(VGG19_1c, contentTile)
+            ), precision).asInstanceOf[PipelineNetwork]
           }
         }
       }
 
       new SumTrainable(
-        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer.addRef(), contentCoeff / 10),
+//        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer.addRef(), contentCoeff / 10),
         getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
           colorAdjustmentLayer.addRef(),
           new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)
@@ -135,9 +134,9 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
     withMonitoredImage(log, () => contentImage.toRgbImage) {
       withTrainingMonitor(log, trainingMonitor => {
         log.eval(() => {
-          val search = new BisectionSearch().setCurrentRate(maxRate / 10).setMaxRate(maxRate).setSpanTol(1e-1)
+          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)
           new IterativeTrainer(trainable_style)
-            .setOrientation(new TrustRegionStrategy(new GradientDescent) {
+            .setOrientation(new TrustRegionStrategy(new LBFGS) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(256)
             })
             .setMonitor(trainingMonitor)
@@ -161,7 +160,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
 
     val trainable_color = log.eval(() => {
       def styleMatcher = new GramMatrixMatcher() //.combine(new ChannelMeanMatcher().scale(1e0))
-      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), Precision.Float).asInstanceOf[PipelineNetwork]
+      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), precision).asInstanceOf[PipelineNetwork]
       new TiledTrainable(contentImage, colorAdjustmentLayer, tileSize, tilePadding) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           regionSelector.freeRef()
@@ -178,7 +177,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
             .setOrientation(new LBFGS())
             .setMonitor(trainingMonitor)
             .setTimeout(5, TimeUnit.MINUTES)
-            .setMaxIterations(20)
+            .setMaxIterations(5)
             .setLineSearchFactory((_: CharSequence) => search)
             .setTerminateThreshold(0)
             .runAndFree

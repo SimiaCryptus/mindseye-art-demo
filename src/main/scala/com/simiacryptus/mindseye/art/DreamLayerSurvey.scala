@@ -67,16 +67,16 @@ abstract class DreamLayerSurvey extends ArtSetup[Object] {
   val imageUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val contentResolution = 512
   val trainingMinutes = 30
-  val trainingIterations = 20
+  val trainingIterations = 100
   val tileSize = 512
   val tilePadding = 8
   val maxRate = 1e6
-  def precision = Precision.Double
+  def precision = Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
     survey(log, Inception5H.getVisionPipeline)
-    survey(log, VGG19.getVisionPipeline)
     survey(log, VGG16.getVisionPipeline)
+    survey(log, VGG19.getVisionPipeline)
     null
   }
 

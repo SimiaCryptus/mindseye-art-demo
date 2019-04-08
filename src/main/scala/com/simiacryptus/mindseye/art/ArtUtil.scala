@@ -79,13 +79,14 @@ object ArtUtil {
   }
 
   def load(log: NotebookOutput, contentImage: Tensor, url: String) = {
+    val noiseRegex = "noise(.*)".r
     url match {
       case "plasma" => Tensor.fromRGB(log.eval(() => {
         val contentDims = contentImage.getDimensions()
         new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
       }))
-      case "noise" => Tensor.fromRGB(log.eval(() => {
-        contentImage.map((v: Double) => FastRandom.INSTANCE.random() * 100).toRgbImage
+      case noiseRegex(ampl:String) => Tensor.fromRGB(log.eval(() => {
+        contentImage.map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
       }))
       case _ => Tensor.fromRGB(log.eval(() => {
         val contentDims = contentImage.getDimensions()

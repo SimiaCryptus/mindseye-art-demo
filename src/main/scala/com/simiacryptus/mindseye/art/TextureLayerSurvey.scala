@@ -95,12 +95,12 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
   }
 
   def survey(log: NotebookOutput, styleImage: Tensor, layer: VisionPipelineLayer) = {
-    val contentImage = Tensor.fromRGB(log.eval(() => {
+    val contentImage = Tensor.fromRGB({
       val tensor = new Plasma().paint(contentResolution, contentResolution)
       val toRgbImage = tensor.toRgbImage
       tensor.freeRef()
       toRgbImage
-    }))
+    })
     val operator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
       MultiPrecision.setPrecision(SumInputsLayer.combine(

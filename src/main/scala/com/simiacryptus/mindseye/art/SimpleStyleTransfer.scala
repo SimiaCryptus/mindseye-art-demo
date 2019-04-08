@@ -58,25 +58,24 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
 }
 
 object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
-  override val contentResolution = 256
-  override val styleResolution = 256
+  override val contentResolution = 512
+  override val styleResolution = 512
   override def inputTimeoutSeconds = 60
 }
 
 abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
-  val inputUrl = "noise"
+  val inputUrl = contentUrl
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 512
-  val styleResolution = 512
+  val contentResolution = 1024
+  val styleResolution = 1024
   val trainingMinutes: Int = 60
   val trainingIterations: Int = 1000
   val tileSize = 512
   val tilePadding = 8
-  val maxRate = 1e5
-  val contentCoeff = 1e-4
-  val styleMeanCoeff = 1e0
+  val maxRate = 1e10
+  val contentCoeff = 1e-6
   def precision = Precision.Double
 
   override def postConfigure(log: NotebookOutput) = {
@@ -91,6 +90,9 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
     val styleOperator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
       SumInputsLayer.combine(
+        styleOperator.build(Inc5H_1a, styleImage),
+        styleOperator.build(Inc5H_2a, styleImage),
+        styleOperator.build(Inc5H_3b, styleImage),
         styleOperator.build(VGG19_1a, styleImage),
         styleOperator.build(VGG19_1b, styleImage),
         styleOperator.build(VGG19_1c, styleImage)

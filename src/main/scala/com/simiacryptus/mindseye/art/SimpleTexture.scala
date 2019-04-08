@@ -27,13 +27,14 @@ import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19
+import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
-import com.simiacryptus.mindseye.opt.line.BisectionSearch
-import com.simiacryptus.mindseye.opt.orient.{GradientDescent, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, BisectionSearch}
+import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
@@ -57,10 +58,9 @@ object SimpleTexture_EC2 extends SimpleTexture with EC2Runner[Object] with AWSNo
 }
 
 object SimpleTexture_Local extends SimpleTexture with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 600
-
-  override val contentResolution = 300
-  override val styleResolution = 600
+  override def inputTimeoutSeconds = 60
+  override val contentResolution = 256
+  override val styleResolution = 640
 }
 
 abstract class SimpleTexture extends RepeatedArtSetup[Object] {
@@ -69,8 +69,10 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
   val contentResolution = 512
   val styleResolution = 1280
   val trainingMinutes = 60
-  val trainingIterations = 10
-  val tileSize = 300
+  val trainingIterations = 100
+  val tileSize = 512
+
+  val maxRate: Double = 1e6
 
   override def postConfigure(log: NotebookOutput) = {
     val contentImage = Tensor.fromRGB(log.eval(() => {
@@ -80,11 +82,14 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
     val styleNetwork: PipelineNetwork = log.eval(() => {
-      val operator = new GramMatrixMatcher()
+      val styleOperator = new GramMatrixMatcher()
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        operator.build(VGG19.VGG19_1b, styleImage),
-        operator.build(VGG19.VGG19_2a, styleImage),
-        operator.build(VGG19.VGG19_3a, styleImage)
+        styleOperator.build(Inc5H_1a, styleImage),
+        styleOperator.build(Inc5H_2a, styleImage),
+        styleOperator.build(Inc5H_3b, styleImage),
+        styleOperator.build(VGG19_1a, styleImage),
+        styleOperator.build(VGG19_1b, styleImage),
+        styleOperator.build(VGG19_1c, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]
     })
     TestUtil.graph(log, styleNetwork)
@@ -98,9 +103,9 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
               styleNetwork.addRef()
             }
           }
-          val search = new BisectionSearch().setCurrentRate(1e4).setSpanTol(1e-1)
+          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)
           new IterativeTrainer(trainable)
-            .setOrientation(new TrustRegionStrategy(new GradientDescent) {
+            .setOrientation(new TrustRegionStrategy(new LBFGS) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
             })
             .setMonitor(trainingMonitor)
