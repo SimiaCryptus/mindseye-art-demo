@@ -27,7 +27,7 @@ import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
@@ -35,10 +35,9 @@ import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, BisectionSearch}
-import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
-import com.simiacryptus.mindseye.test.TestUtil
-import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
+import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
@@ -61,7 +60,6 @@ object MultiResStyleTransfer_EC2 extends MultiResStyleTransfer with EC2Runner[Ob
 object MultiResStyleTransfer_Local extends MultiResStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 15
 }
-
 
 
 abstract class MultiResStyleTransfer extends ArtSetup[Object] {
@@ -119,7 +117,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
       }
 
       new SumTrainable(
-//        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer.addRef(), contentCoeff / 10),
+        //        getTileTrainer(contentImage, styleImage, colorAdjustmentLayer.addRef(), contentCoeff / 10),
         getTileTrainer(contentImage, styleImage, PipelineNetwork.wrap(1,
           colorAdjustmentLayer.addRef(),
           new PoolingLayer().setMode(PoolingLayer.PoolingMode.Avg).setWindowXY(2, 2).setStrideXY(2, 2)

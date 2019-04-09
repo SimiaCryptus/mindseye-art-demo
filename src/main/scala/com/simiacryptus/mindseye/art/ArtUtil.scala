@@ -19,31 +19,95 @@
 
 package com.simiacryptus.mindseye.art
 
-import java.awt.image.BufferedImage
-import java.io.{IOException, OutputStream, PrintStream, PrintWriter}
-import java.text.SimpleDateFormat
-import java.util.{Date, UUID}
 import java.util.concurrent.TimeUnit
 
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.AppenderBase
-import com.simiacryptus.mindseye.lang.Tensor
-import com.simiacryptus.mindseye.lang.cudnn.CudaSystem
+import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
+import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
-import com.simiacryptus.mindseye.opt.{Step, TrainingMonitor}
+import com.simiacryptus.mindseye.opt.line.BisectionSearch
+import com.simiacryptus.mindseye.opt.orient.GradientDescent
+import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
-import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
+import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.util.{FastRandom, Util}
-import javax.imageio.ImageIO
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
 
 object ArtUtil {
+
+  def pipelineGraphs(log: NotebookOutput, pipeline: VisionPipeline[VisionPipelineLayer]) = {
+    log.subreport(pipeline.name + "_Layers", (sublog: NotebookOutput) => {
+      import scala.collection.JavaConverters._
+      pipeline.getLayers.keySet().asScala.foreach(layer => {
+        sublog.h1(layer.name())
+        TestUtil.graph(sublog, layer.getLayer.asInstanceOf[PipelineNetwork])
+      })
+      null
+    })
+  }
+
+  def load(log: NotebookOutput, contentImage: Tensor, url: String): Tensor = {
+    load(log, contentImage.getDimensions(), url)
+  }
+
+  def load(log: NotebookOutput, contentDims: Array[Int], url: String): Tensor = {
+    val noiseRegex = "noise(.*)".r
+    url match {
+      case "plasma" => Tensor.fromRGB(log.eval(() => {
+        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
+      }))
+      case noiseRegex(ampl: String) => Tensor.fromRGB(log.eval(() => {
+        new Tensor(contentDims: _*).map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
+      }))
+      case _ => Tensor.fromRGB(log.eval(() => {
+        VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
+      }))
+    }
+  }
+
+  def colorTransfer(log: NotebookOutput, contentImage: Tensor, styleImage: Tensor, tileSize: Int, tilePadding: Int, precision: Precision) = {
+    val colorAdjustmentLayer = new SimpleConvolutionLayer(1, 1, 3, 3) //.setPrecision(precision)
+    colorAdjustmentLayer.kernel.setByCoord((c: Coordinate) => {
+      val coords = c.getCoords()(2)
+      if ((coords % 3) == (coords / 3)) 1.0 else 0.0
+    })
+
+    val trainable_color = log.eval(() => {
+      def styleMatcher = new GramMatrixMatcher() //.combine(new ChannelMeanMatcher().scale(1e0))
+      val styleNetwork = MultiPrecision.setPrecision(styleMatcher.build(styleImage), precision).asInstanceOf[PipelineNetwork]
+      new TiledTrainable(contentImage, colorAdjustmentLayer, tileSize, tilePadding, precision) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+          regionSelector.freeRef()
+          styleNetwork.addRef()
+        }
+      }.setMutableCanvas(false)
+    })
+
+    withMonitoredImage(log, () => colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
+      withTrainingMonitor(log, trainingMonitor => {
+        log.eval(() => {
+          val search = new BisectionSearch().setCurrentRate(1e0).setMaxRate(1e3).setSpanTol(1e-3)
+          new IterativeTrainer(trainable_color)
+            .setOrientation(new GradientDescent())
+            .setMonitor(trainingMonitor)
+            .setTimeout(5, TimeUnit.MINUTES)
+            .setMaxIterations(5)
+            .setLineSearchFactory((_: CharSequence) => search)
+            .setTerminateThreshold(0)
+            .runAndFree
+          colorAdjustmentLayer.freeze()
+          colorAdjustmentLayer.getJson()
+        })
+      })
+    }
+    colorAdjustmentLayer
+  }
 
   def withTrainingMonitor[T](log: NotebookOutput, fn: TrainingMonitor => T) = {
     val history = new ArrayBuffer[StepRecord]
@@ -64,34 +128,6 @@ object ArtUtil {
         }
       }
       fn(trainingMonitor)
-    }
-  }
-
-  def pipelineGraphs(log: NotebookOutput, pipeline: VisionPipeline[VisionPipelineLayer]) = {
-    log.subreport(pipeline.name + "_Layers", (sublog: NotebookOutput) => {
-      import scala.collection.JavaConverters._
-      pipeline.getLayers.keySet().asScala.foreach(layer => {
-        sublog.h1(layer.name())
-        TestUtil.graph(sublog, layer.getLayer.asInstanceOf[PipelineNetwork])
-      })
-      null
-    })
-  }
-
-  def load(log: NotebookOutput, contentImage: Tensor, url: String) = {
-    val noiseRegex = "noise(.*)".r
-    url match {
-      case "plasma" => Tensor.fromRGB(log.eval(() => {
-        val contentDims = contentImage.getDimensions()
-        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
-      }))
-      case noiseRegex(ampl:String) => Tensor.fromRGB(log.eval(() => {
-        contentImage.map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
-      }))
-      case _ => Tensor.fromRGB(log.eval(() => {
-        val contentDims = contentImage.getDimensions()
-        VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
-      }))
     }
   }
 

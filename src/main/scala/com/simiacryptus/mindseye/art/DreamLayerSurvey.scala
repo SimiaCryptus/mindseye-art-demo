@@ -24,9 +24,9 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
+import com.simiacryptus.mindseye.art.constraints.RMSChannelEnhancer
 import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
-import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
@@ -60,6 +60,7 @@ object DreamLayerSurvey_EC2 extends DreamLayerSurvey with EC2Runner[Object] with
 
 object DreamLayerSurvey_Local extends DreamLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 256
+
   override def inputTimeoutSeconds = 600
 }
 
@@ -71,7 +72,6 @@ abstract class DreamLayerSurvey extends ArtSetup[Object] {
   val tileSize = 512
   val tilePadding = 8
   val maxRate = 1e6
-  def precision = Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
     survey(log, Inception5H.getVisionPipeline)
@@ -130,4 +130,6 @@ abstract class DreamLayerSurvey extends ArtSetup[Object] {
     }
     contentImage.freeRef()
   }
+
+  def precision = Precision.Float
 }

@@ -25,10 +25,8 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H._
-import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
@@ -41,7 +39,6 @@ import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
-import com.simiacryptus.util.FastRandom
 
 object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -60,10 +57,12 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
 object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 512
   override val styleResolution = 512
-  override def inputTimeoutSeconds = 60
+
+  override def inputTimeoutSeconds = 5
 }
 
-abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
+//abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
+abstract class SimpleStyleTransfer extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val inputUrl = contentUrl
@@ -71,31 +70,34 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
   val contentResolution = 1024
   val styleResolution = 1024
   val trainingMinutes: Int = 60
-  val trainingIterations: Int = 1000
+  val trainingIterations: Int = 30
   val tileSize = 512
   val tilePadding = 8
   val maxRate = 1e10
-  val contentCoeff = 1e-6
-  def precision = Precision.Double
+  val contentCoeff = 1e-4
 
   override def postConfigure(log: NotebookOutput) = {
+    CudaSettings.INSTANCE().defaultPrecision = precision
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
     val canvasImage = load(log, contentImage, inputUrl)
-    val styleImage = Tensor.fromRGB(log.eval(() => {
+    var styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
+    styleImage = colorTransfer(log, styleImage, contentImage, tileSize, tilePadding, precision)
+      .copy().freeze().eval(styleImage).getDataAndFree.getAndFree(0)
+
     val contentOperator = new RMSContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
       SumInputsLayer.combine(
-        styleOperator.build(Inc5H_1a, styleImage),
-        styleOperator.build(Inc5H_2a, styleImage),
-        styleOperator.build(Inc5H_3b, styleImage),
-        styleOperator.build(VGG19_1a1, styleImage),
-        styleOperator.build(VGG19_1b1, styleImage),
-        styleOperator.build(VGG19_1c1, styleImage)
+        styleOperator.build(VGG16_0, styleImage),
+        styleOperator.build(VGG16_1a, styleImage),
+        styleOperator.build(VGG16_1b1, styleImage),
+        styleOperator.build(VGG16_1b2, styleImage),
+        styleOperator.build(VGG16_1c2, styleImage),
+        styleOperator.build(VGG16_1c3, styleImage)
       )
     })
     withMonitoredImage(log, canvasImage.toRgbImage) {
@@ -106,12 +108,12 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
             regionSelector.freeRef()
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               styleNetwork.addRef(),
-              contentOperator.build(VGG19_1c1, contentTile)
+              contentOperator.build(VGG16_1c1, contentTile)
             ), precision).freeze().asInstanceOf[PipelineNetwork]
           }
         }
         log.eval(() => {
-          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)
+          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
           new IterativeTrainer(trainable)
             .setOrientation(new TrustRegionStrategy(new LBFGS) {
               override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
@@ -127,5 +129,8 @@ abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
       })
     }
   }
+
+  def precision = Precision.Double
+
 
 }

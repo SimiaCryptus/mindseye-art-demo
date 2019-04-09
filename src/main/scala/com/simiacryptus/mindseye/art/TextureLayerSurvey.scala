@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
-import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
-import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
+import com.simiacryptus.mindseye.art.models.{VGG16, VGG19}
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
@@ -61,6 +61,7 @@ object TextureLayerSurvey_EC2 extends TextureLayerSurvey with EC2Runner[Object] 
 object TextureLayerSurvey_Local extends TextureLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 256
   override val styleResolution = 256
+
   override def inputTimeoutSeconds = 600
 }
 
@@ -68,18 +69,17 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
   val contentResolution = 512
   val styleResolution = 512
-  val trainingMinutes = 30
-  val trainingIterations = 20
+  val trainingMinutes = 15
+  val trainingIterations = 100
   val tileSize = 512
   val tilePadding = 8
-  val maxRate = 1e6
-  def precision = Precision.Double
+  val maxRate = 1e10
 
   override def postConfigure(log: NotebookOutput) = {
     val styleImage: Tensor = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
-    survey(log, styleImage, Inception5H.getVisionPipeline)
+    //survey(log, styleImage, Inception5H.getVisionPipeline)
     survey(log, styleImage, VGG19.getVisionPipeline)
     survey(log, styleImage, VGG16.getVisionPipeline)
     null
@@ -140,4 +140,6 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
     }
     contentImage.freeRef()
   }
+
+  def precision = Precision.Float
 }

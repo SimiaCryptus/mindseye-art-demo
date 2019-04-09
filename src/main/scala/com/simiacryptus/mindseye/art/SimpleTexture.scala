@@ -24,20 +24,19 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer}
+import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
 import com.simiacryptus.mindseye.art.models.Inception5H._
-import com.simiacryptus.mindseye.art.models.VGG19
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
-import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, BisectionSearch}
-import com.simiacryptus.mindseye.opt.orient.{GradientDescent, LBFGS, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
+import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
-import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
+import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
@@ -58,9 +57,10 @@ object SimpleTexture_EC2 extends SimpleTexture with EC2Runner[Object] with AWSNo
 }
 
 object SimpleTexture_Local extends SimpleTexture with LocalRunner[Object] with NotebookRunner[Object] {
-  override def inputTimeoutSeconds = 60
   override val contentResolution = 256
   override val styleResolution = 640
+
+  override def inputTimeoutSeconds = 60
 }
 
 abstract class SimpleTexture extends RepeatedArtSetup[Object] {

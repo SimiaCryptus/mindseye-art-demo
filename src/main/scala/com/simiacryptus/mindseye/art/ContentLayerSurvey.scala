@@ -24,9 +24,9 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSChannelEnhancer, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.constraints.RMSContentMatcher
 import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
-import com.simiacryptus.mindseye.lang.cudnn.{CudaMemory, MultiPrecision, Precision}
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
@@ -61,6 +61,7 @@ object ContentLayerSurvey_EC2 extends ContentLayerSurvey with EC2Runner[Object] 
 
 object ContentLayerSurvey_Local extends ContentLayerSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 256
+
   override def inputTimeoutSeconds = 600
 }
 
@@ -72,7 +73,6 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
   val tileSize = 512
   val tilePadding = 8
   val maxRate = 1e9
-  def precision = Precision.Double
 
   override def postConfigure(log: NotebookOutput) = {
     survey(log, Inception5H.getVisionPipeline)
@@ -93,7 +93,7 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
   def survey(log: NotebookOutput, layer: VisionPipelineLayer): Unit = {
     val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(imageUrl, contentResolution))
     val operator = new RMSContentMatcher
-    val canvas = contentImage.map((v:Double) => 200 * FastRandom.INSTANCE.random())
+    val canvas = contentImage.map((v: Double) => 200 * FastRandom.INSTANCE.random())
     val trainable = new TiledTrainable(canvas, tileSize, tilePadding, precision) {
       override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
         val network = MultiPrecision.setPrecision(SumInputsLayer.combine(
@@ -130,4 +130,6 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
     canvas.freeRef()
     contentImage.freeRef()
   }
+
+  def precision = Precision.Double
 }
