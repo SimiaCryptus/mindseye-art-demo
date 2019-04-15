@@ -85,9 +85,8 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
     var styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
-    styleImage = colorTransfer(log, styleImage, contentImage, tileSize, tilePadding, precision)
+    styleImage = colorTransfer(styleImage, List(contentImage), false)(log)
       .copy().freeze().eval(styleImage).getDataAndFree.getAndFree(0)
-
     val contentOperator = new RMSContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
@@ -131,6 +130,5 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
   }
 
   def precision = Precision.Double
-
 
 }
