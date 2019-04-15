@@ -25,7 +25,9 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher}
+import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG16._
+import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
@@ -78,34 +80,28 @@ class IteratedTexture extends ArtSetup[Object] {
   val tileSize = 480
   val tilePadding = 32
   val styleMagnification = 1.0
-  val styleMin = 128
+  val styleMin = 64
   val styleMax = 1280
   val aspect = 8.5 / 10
   val styleEnhancement = 1e0
-  val resolutions: Array[Int] = Array(
-    64,
-    128,
-    256,
-    512
-  )
+  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / 3)).toInt).takeWhile(_ <= 512).toArray
 
   override def cudaLog = false
 
   def precision = Precision.Float
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
-    //    Inc5H_1a,
-    //    Inc5H_2a,
-    //    Inc5H_3a,
-    //    Inc5H_3b,
-    //    Inc5H_4a,
-
-    //    Inc5H_4b,
-    //    Inc5H_4c,
-    //    Inc5H_4d,
-    //    Inc5H_4e,
-    //    Inc5H_5a,
-    //    Inc5H_5b,
+    Inc5H_1a,
+    Inc5H_2a,
+    Inc5H_3a,
+    Inc5H_3b,
+    Inc5H_4a,
+    Inc5H_4b,
+    Inc5H_4c,
+    //Inc5H_4d,
+    //Inc5H_4e,
+    //Inc5H_5a,
+    //Inc5H_5b,
 
     VGG16_0,
     VGG16_1a,
@@ -119,28 +115,26 @@ class IteratedTexture extends ArtSetup[Object] {
     VGG16_1d3,
     VGG16_1e1,
     VGG16_1e2,
-    VGG16_1e3
+    VGG16_1e3,
     //    VGG16_2
 
-    //    VGG19_0,
-
-    //    VGG19_1a1,
-    //    VGG19_1a2,
-    //    VGG19_1b1,
-    //    VGG19_1b2,
-    //    VGG19_1c1,
-    //    VGG19_1c2,
-    //    VGG19_1c3,
-    //    VGG19_1c4
-
-    //    VGG19_1d1
-    //    VGG19_1d2,
-    //    VGG19_1d3,
-    //    VGG19_1d4
-    //    VGG19_1e1,
-    //    VGG19_1e2,
-    //    VGG19_1e3,
-    //    VGG19_1e4
+    VGG19_0,
+    VGG19_1a1,
+    VGG19_1a2,
+    VGG19_1b1,
+    VGG19_1b2,
+    VGG19_1c1,
+    VGG19_1c2,
+    VGG19_1c3,
+    VGG19_1c4,
+    VGG19_1d1,
+    VGG19_1d2,
+    VGG19_1d3,
+    VGG19_1d4,
+    VGG19_1e1,
+    VGG19_1e2,
+    VGG19_1e3,
+    VGG19_1e4
     //    VGG19_2
   )
 
