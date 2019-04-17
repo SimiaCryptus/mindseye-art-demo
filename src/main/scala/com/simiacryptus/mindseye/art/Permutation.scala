@@ -23,11 +23,11 @@ case class Permutation(indices: Array[Int]) {
 
   val unity = Permutation((1 to indices.length).toArray)
 
-  def ^(n: Int) = {
+  def ^(n: Int): Permutation = {
     Stream.iterate(unity)(this * _)(n)
   }
 
-  def *(right: Permutation) = {
+  def *(right: Permutation): Permutation = {
     Permutation(this * right.indices)
   }
 
