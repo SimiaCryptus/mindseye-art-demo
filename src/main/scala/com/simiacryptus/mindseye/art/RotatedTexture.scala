@@ -78,7 +78,6 @@ class RotatedTexture extends ArtSetup[Object] {
   val trainingMinutes: Int = 60
   val trainingIterations: Int = 20
   val maxRate = 1e10
-  val tileSize = 512
   val tilePadding = 32
   val styleMagnification = 1.0
   val styleMin = 64
@@ -94,7 +93,8 @@ class RotatedTexture extends ArtSetup[Object] {
 
   override def cudaLog = false
 
-  def precision = Precision.Float
+  def precision(width:Int) = if(width < 512) Precision.Double else Precision.Float
+  def tileSize(precision:Precision) = if(precision==Precision.Double) 256 else 512
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
     //    Inc5H_1a,
@@ -151,7 +151,6 @@ class RotatedTexture extends ArtSetup[Object] {
         "style" -> styleLayers.map(_.name())
       ))
     })
-    CudaSettings.INSTANCE().defaultPrecision = precision
     for (styleName <- styleList) {
       log.h1(styleName)
       val styleUrl: Array[String] = findFiles(styleName)
@@ -159,6 +158,7 @@ class RotatedTexture extends ArtSetup[Object] {
       withMonitoredImage(log, () => Option(canvas).map(_.toRgbImage).orNull) {
         log.subreport(styleName, (sub: NotebookOutput) => {
           for (res <- resolutions) {
+            CudaSettings.INSTANCE().defaultPrecision = precision(res)
             sub.h1("Resolution " + res)
             if (null == canvas) {
               canvas = transfer_url(url = inputUrl, width = res, styleUrl)(sub)
@@ -182,7 +182,7 @@ class RotatedTexture extends ArtSetup[Object] {
       colorTransfer(canvas, styleImages, false)(log).copy().freeze().eval(canvas).getDataAndFree.getAndFree(0).toRgbImage
     }))
     log.h2("Result")
-    stayleTransfer(precision, styleImages, canvas)
+    stayleTransfer(precision(width), styleImages, canvas)
   }
 
   def transfer_img(img: Tensor, width: Int, styleUrl: Array[String])(implicit log: NotebookOutput): Tensor = {
@@ -190,7 +190,7 @@ class RotatedTexture extends ArtSetup[Object] {
     log.h2("Style")
     val styleImage = loadStyles(canvas, styleUrl)
     log.h2("Result")
-    stayleTransfer(precision, styleImage, canvas)
+    stayleTransfer(precision(width), styleImage, canvas)
   }
 
   def loadStyles(contentImage: Tensor, styleUrl: Array[String])(implicit log: NotebookOutput) = {
@@ -215,18 +215,19 @@ class RotatedTexture extends ArtSetup[Object] {
 
   def stayleTransfer(precision: Precision, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
     val canvasDims = canvasImage.getDimensions()
-    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasDims(0))))
-    val paddingLayer = new ImgViewLayer(canvasDims(0) + borderPreExpansion, canvasDims(1) + borderPreExpansion, true).setOffsetX(-borderPreExpansion / 2).setOffsetY(-borderPreExpansion / 2).freeze()
-    val kalidescopeLayer = getKalidescope(canvasDims)
-
+    val kaleidoscopeLayer = getKaleidoscope(canvasDims)
+    val viewLayer = PipelineNetwork.wrap(1,
+      kaleidoscopeLayer.addRef(),
+      new ImgViewLayer(canvasDims(0) + borderPreExpansion, canvasDims(1) + borderPreExpansion, true)
+        .setOffsetX(-borderPreExpansion / 2).setOffsetY(-borderPreExpansion / 2).freeze()
+    )
+    val currentTileSize = tileSize(precision)
+    val styleOperator = new GramMatrixMatcher().setTileSize(currentTileSize)
+      .combine(new GramMatrixEnhancer().setTileSize(currentTileSize).scale(styleEnhancement(canvasDims(0))))
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine(pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)): _*)
-      //TestUtil.graph(log, styleNetwork)
-      new TiledTrainable(canvasImage, PipelineNetwork.wrap(1,
-        kalidescopeLayer.addRef(),
-        paddingLayer
-      ), tileSize, tilePadding, precision) {
+      new TiledTrainable(canvasImage, viewLayer, currentTileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           regionSelector.freeRef()
           MultiPrecision.setPrecision(styleNetwork.addRef(), precision).asInstanceOf[PipelineNetwork]
@@ -234,7 +235,7 @@ class RotatedTexture extends ArtSetup[Object] {
       }
     })): _*)
     withMonitoredImage(log, () => canvasImage.toRgbImage) {
-      withMonitoredImage(log, () => kalidescopeLayer.eval(canvasImage).getDataAndFree.getAndFree(0).toImage) {
+      withMonitoredImage(log, () => kaleidoscopeLayer.eval(canvasImage).getDataAndFree.getAndFree(0).toImage) {
         withTrainingMonitor(log, trainingMonitor => {
           log.eval(() => {
             val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
@@ -256,7 +257,7 @@ class RotatedTexture extends ArtSetup[Object] {
     canvasImage
   }
 
-  def getKalidescope(canvasDims: Array[Int]) = {
+  def getKaleidoscope(canvasDims: Array[Int]) = {
     val permutation = Permutation(this.permutation)
     require(permutation.unity == (permutation ^ segments), s"$permutation ^ $segments => ${(permutation ^ segments)} != ${permutation.unity}")
     val network = new PipelineNetwork(1)
