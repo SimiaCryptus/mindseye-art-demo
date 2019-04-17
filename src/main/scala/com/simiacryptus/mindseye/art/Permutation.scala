@@ -21,7 +21,7 @@ package com.simiacryptus.mindseye.art
 
 case class Permutation(indices: Array[Int]) {
 
-  val unity = Permutation((1 to indices.length).toArray)
+  lazy val unity = Permutation((1 to indices.length).toArray)
 
   def ^(n: Int): Permutation = {
     Stream.iterate(unity)(this * _)(n)
