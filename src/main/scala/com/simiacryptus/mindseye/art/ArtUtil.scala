@@ -138,14 +138,6 @@ object ArtUtil {
     colorAdjustmentLayer
   }
 
-  def withTrainingMonitor[T](log: NotebookOutput, fn: TrainingMonitor => T) = {
-    val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredImage(log, () => Util.toImage(TestUtil.plot(history))) {
-      val trainingMonitor: TrainingMonitor = getTrainingMonitor(history)
-      fn(trainingMonitor)
-    }
-  }
-
   def getTrainingMonitor[T](history: ArrayBuffer[StepRecord] = new ArrayBuffer[StepRecord], verbose: Boolean = true): TrainingMonitor = {
     val trainingMonitor = new TrainingMonitor() {
       override def clear(): Unit = {
@@ -165,7 +157,15 @@ object ArtUtil {
     trainingMonitor
   }
 
-  def findFiles(base: String, key: String): Array[String] = {
+  def withTrainingMonitor[T](log: NotebookOutput, fn: TrainingMonitor => T) = {
+    val history = new ArrayBuffer[StepRecord]
+    NotebookRunner.withMonitoredImage(log, () => Util.toImage(TestUtil.plot(history))) {
+      val trainingMonitor: TrainingMonitor = getTrainingMonitor(history)
+      fn(trainingMonitor)
+    }
+  }
+
+  def findFiles(key: String, base: String = "s3a://simiacryptus/photos/wikiart/"): Array[String] = {
     val itr = FileSystem.get(new URI(base), VisionPipelineUtil.getHadoopConfig()).listFiles(new Path(base), true)
     val buffer = new ArrayBuffer[String]()
     while (itr.hasNext) {

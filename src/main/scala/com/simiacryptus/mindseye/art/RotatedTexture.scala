@@ -25,12 +25,10 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.layers.java.SumInputsLayer
+import com.simiacryptus.mindseye.layers.java.{ImgViewLayer, LinearActivationLayer, SumInputsLayer}
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
@@ -45,7 +43,7 @@ import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
 
 import scala.util.Random
 
-object IteratedTexture_EC2 extends IteratedTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object RotatedTexture_EC2 extends RotatedTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
   override def inputTimeoutSeconds = 600
 
@@ -59,19 +57,21 @@ object IteratedTexture_EC2 extends IteratedTexture with EC2Runner[Object] with A
 
 }
 
-object IteratedTexture_Local extends IteratedTexture with LocalRunner[Object] with NotebookRunner[Object] {
+object RotatedTexture_Local extends RotatedTexture with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
 }
 
-class IteratedTexture extends ArtSetup[Object] {
+class RotatedTexture extends ArtSetup[Object] {
 
   val styleList = Array(
-    "rembrandt",
-    "pablo-picasso",
-    "henri-matisse"
+    "david-bates",
+    "claude-monet",
+    "cornelis-springer"
+    //    "rembrandt",
+    //    "henri-matisse",
+    //    "pablo-picasso"
     //    "allan-d-arcangelo",
     //    "jacopo-bassano",
-    //    "david-bates",
     //    "henri-rousseau"
   )
   val inputUrl = "plasma"
@@ -83,24 +83,27 @@ class IteratedTexture extends ArtSetup[Object] {
   val styleMagnification = 1.0
   val styleMin = 64
   val styleMax = 1280
-  val aspect = (11.0 - 0.5) / (8.5 - 0.5)
+  val aspect = 1.0
   val stylePixelMax = 5e6
-  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 600) 3 else 2))).toInt).takeWhile(_ <= 1280).toArray
+  val segments = 3
+  val permutation = Array(2, 3, 1)
+  val borderPreExpansion = 32
+  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 512) 3 else 2))).toInt).takeWhile(_ <= 800).toArray
 
-  def styleEnhancement(width: Int): Double = if (width < 300) 1e1 else if (width < 800) 1e0 else 0
+  def styleEnhancement(width: Int): Double = if (width < 300) 1e1 else if (width < 600) 1e0 else 0
 
   override def cudaLog = false
 
   def precision = Precision.Float
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
-    Inc5H_1a,
-    Inc5H_2a,
-    Inc5H_3a,
-    Inc5H_3b,
-    Inc5H_4a,
-    Inc5H_4b,
-    Inc5H_4c,
+    //    Inc5H_1a,
+    //    Inc5H_2a,
+    //    Inc5H_3a,
+    //    Inc5H_3b,
+    //    Inc5H_4a,
+    //    Inc5H_4b,
+    //    Inc5H_4c,
     //Inc5H_4d,
     //Inc5H_4e,
     //Inc5H_5a,
@@ -118,33 +121,33 @@ class IteratedTexture extends ArtSetup[Object] {
     VGG16_1d3,
     VGG16_1e1,
     VGG16_1e2,
-    VGG16_1e3,
+    VGG16_1e3
     //    VGG16_2
 
-    VGG19_0,
-    VGG19_1a1,
-    VGG19_1a2,
-    VGG19_1b1,
-    VGG19_1b2,
-    VGG19_1c1,
-    VGG19_1c2,
-    VGG19_1c3,
-    VGG19_1c4,
-    VGG19_1d1,
-    VGG19_1d2,
-    VGG19_1d3,
-    VGG19_1d4,
-    VGG19_1e1,
-    VGG19_1e2,
-    VGG19_1e3,
-    VGG19_1e4
+    //    VGG19_0,
+    //    VGG19_1a1,
+    //    VGG19_1a2,
+    //    VGG19_1b1,
+    //    VGG19_1b2,
+    //    VGG19_1c1,
+    //    VGG19_1c2,
+    //    VGG19_1c3,
+    //    VGG19_1c4,
+    //    VGG19_1d1,
+    //    VGG19_1d2,
+    //    VGG19_1d3,
+    //    VGG19_1d4,
+    //    VGG19_1e1,
+    //    VGG19_1e2,
+    //    VGG19_1e3,
+    //    VGG19_1e4
     //    VGG19_2
   )
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
       ScalaJson.toJson(Map(
-        "this" -> IteratedTexture.this,
+        "this" -> RotatedTexture.this,
         "style" -> styleLayers.map(_.name())
       ))
     })
@@ -211,37 +214,65 @@ class IteratedTexture extends ArtSetup[Object] {
   }
 
   def stayleTransfer(precision: Precision, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
-    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
+    val canvasDims = canvasImage.getDimensions()
+    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasDims(0))))
+    val paddingLayer = new ImgViewLayer(canvasDims(0) + borderPreExpansion, canvasDims(1) + borderPreExpansion, true).setOffsetX(-borderPreExpansion / 2).setOffsetY(-borderPreExpansion / 2).freeze()
+    val kalidescopeLayer = getKalidescope(canvasDims)
+
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine(pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)): _*)
       //TestUtil.graph(log, styleNetwork)
-      new TiledTrainable(canvasImage, tileSize, tilePadding, precision) {
+      new TiledTrainable(canvasImage, PipelineNetwork.wrap(1,
+        kalidescopeLayer.addRef(),
+        paddingLayer
+      ), tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           regionSelector.freeRef()
           MultiPrecision.setPrecision(styleNetwork.addRef(), precision).asInstanceOf[PipelineNetwork]
         }
       }
     })): _*)
-    withMonitoredImage(log, canvasImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
-        log.eval(() => {
-          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
-          IterativeTrainer.wrap(trainable)
-            .setOrientation(new TrustRegionStrategy(new LBFGS) {
-              override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(256)
-            })
-            .setMonitor(trainingMonitor)
-            .setTimeout(trainingMinutes, TimeUnit.MINUTES)
-            .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => search)
-            .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
-            .runAndFree
-            .asInstanceOf[lang.Double]
+    withMonitoredImage(log, () => canvasImage.toRgbImage) {
+      withMonitoredImage(log, () => kalidescopeLayer.eval(canvasImage).getDataAndFree.getAndFree(0).toImage) {
+        withTrainingMonitor(log, trainingMonitor => {
+          log.eval(() => {
+            val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
+            IterativeTrainer.wrap(trainable)
+              .setOrientation(new TrustRegionStrategy(new LBFGS) {
+                override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(256)
+              })
+              .setMonitor(trainingMonitor)
+              .setTimeout(trainingMinutes, TimeUnit.MINUTES)
+              .setMaxIterations(trainingIterations)
+              .setLineSearchFactory((_: CharSequence) => search)
+              .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
+              .runAndFree
+              .asInstanceOf[lang.Double]
+          })
         })
-      })
+      }
     }
     canvasImage
   }
 
+  def getKalidescope(canvasDims: Array[Int]) = {
+    val permutation = Permutation(this.permutation)
+    require(permutation.unity == (permutation ^ segments), s"$permutation ^ $segments => ${(permutation ^ segments)} != ${permutation.unity}")
+    val network = new PipelineNetwork(1)
+    network.add(new SumInputsLayer(), (0.0 until 1.0 by 1.0 / segments).distinct.map(_ * 2 * Math.PI)
+      .map(rads => if (0 == rads) network.getInput(0) else {
+        network.wrap(
+          new ImgViewLayer(canvasDims(0), canvasDims(1), true)
+            .setRotationCenterX(canvasDims(0) / 2)
+            .setRotationCenterY(canvasDims(1) / 2)
+            .setRotationRadians(rads)
+            .setChannelSelector(permutation.indices: _*),
+          network.getInput(0)
+        )
+      }): _*).freeRef()
+    network.wrap(new LinearActivationLayer().setScale(1.0 / segments).freeze()).freeRef()
+    network
+  }
 }
+

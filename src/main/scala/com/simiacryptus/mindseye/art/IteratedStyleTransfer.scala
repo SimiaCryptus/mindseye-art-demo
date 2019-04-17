@@ -24,8 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
-import com.simiacryptus.mindseye.art.models.Inception5H._
+import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -41,6 +40,8 @@ import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
+
+import scala.util.Random
 
 object IteratedStyleTransfer_EC2 extends IteratedStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -63,51 +64,51 @@ object IteratedStyleTransfer_Local extends IteratedStyleTransfer with LocalRunne
 class IteratedStyleTransfer extends ArtSetup[Object] {
 
   val styleList = Array(
-    "rembrandt",
+    "antonio-jacobsen",
+    "albert-bierstadt",
+    "arkhip-kuindzhi",
+    "bartolome-esteban-murillo",
     "pablo-picasso",
+    "rembrandt",
     "allan-d-arcangelo",
+    "david-bates",
     "henri-matisse",
     "jacopo-bassano",
-    "david-bates",
     "henri-rousseau"
   )
-  val artBase = "file:///H:/SimiaCryptus/data-science-tools/2019_04_13_13_31/images/"
-  val contentUrl = "file:///C:/Users/andre/Downloads/IMG_20180713_065121868_HDR_edited.jpg"
+  val contentUrl = "file:///C:/Users/andre/Downloads/photos (1)/04-15-2019_13_44/P6.jpg"
   val inputUrl = "content"
+  val contentCoeff = 1e2
+
+  val maxRate = 1e10
   val trainingMinutes: Int = 60
   val trainingIterations: Int = 20
-  val maxRate = 1e10
   val tileSize = 480
   val tilePadding = 32
-  val contentCoeff = 1e0
+
   val balanceColor = false
   val colorBalanceRes = 320
-  val styleMagnification = 1.0
-  val styleMin = 320
-  val styleMax = 1280
-  val resolutions: Array[Int] = Array(
-    128,
-    256,
-    512,
-    640,
-    800
-  )
 
-  override def cudaLog = false
+  val styleMagnification = 1.0
+  val styleMin = 64
+  val styleMax = 1280
+  val stylePixelMax = 5e6
+  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 600) 3 else 2))).toInt).takeWhile(_ <= 1280).toArray
+
+  def styleEnhancement(width: Int): Double = if (width < 300) 1e1 else if (width < 800) 1e0 else 0
 
   def precision = Precision.Float
 
   def contentLayers: Seq[VisionPipelineLayer] = List(
-    Inc5H_3b,
-    VGG16_1d1
-    //    VGG19_1d1
+    VGG16_1c3,
+    VGG16_1d3
   )
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
     //    Inc5H_1a,
-    Inc5H_2a,
-    Inc5H_3a,
-    Inc5H_3b,
+    //    Inc5H_2a,
+    //    Inc5H_3a,
+    //    Inc5H_3b,
     //    Inc5H_4a,
 
     //    Inc5H_4b,
@@ -117,25 +118,22 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     //    Inc5H_5a,
     //    Inc5H_5b,
 
-    //    VGG16_0,
-
-    //    VGG16_1a,
+    VGG16_0,
+    VGG16_1a,
     VGG16_1b1,
     VGG16_1b2,
     VGG16_1c1,
     VGG16_1c2,
-    VGG16_1c3
-
-    //    VGG16_1d1,
-    //    VGG16_1d2,
-    //    VGG16_1d3,
-    //    VGG16_1e1,
-    //    VGG16_1e2,
-    //    VGG16_1e3,
+    VGG16_1c3,
+    VGG16_1d1,
+    VGG16_1d2,
+    VGG16_1d3,
+    VGG16_1e1,
+    VGG16_1e2,
+    VGG16_1e3
     //    VGG16_2,
 
     //    VGG19_0,
-
     //    VGG19_1a1,
     //    VGG19_1a2,
     //    VGG19_1b1,
@@ -167,7 +165,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     CudaSettings.INSTANCE().defaultPrecision = precision
     for (styleName <- styleList) {
       log.h1(styleName)
-      val styleUrl: Array[String] = findFiles(artBase, styleName)
+      val styleUrl: Array[String] = findFiles(styleName)
       var canvas: Tensor = null
       withMonitoredImage(log, () => Option(canvas).map(_.toRgbImage).orNull) {
         log.subreport(styleName, (sub: NotebookOutput) => {
@@ -213,7 +211,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
   }
 
   def loadStyles(balanceColor: Boolean, contentImage: Tensor, styleUrl: Array[String])(implicit log: NotebookOutput) = {
-    styleUrl.map(styleUrl => {
+    val styles = Random.shuffle(styleUrl.toList).map(styleUrl => {
       var styleImage = VisionPipelineUtil.load(styleUrl, -1)
       if (balanceColor) {
         styleImage = colorTransfer(
@@ -228,14 +226,18 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
       if (finalWidth < styleMin) finalWidth = styleMin
       if (finalWidth > Math.min(styleMax, styleImage.getWidth)) finalWidth = Math.min(styleMax, styleImage.getWidth)
       val resized = TestUtil.resize(styleImage, finalWidth, true)
-      log.p(log.jpg(resized, styleUrl))
       Tensor.fromRGB(resized)
+    }).toBuffer
+    while (styles.map(_.getDimensions).map(d => d(0) * d(1)).sum > stylePixelMax) styles.remove(0)
+    styles.foreach(style => {
+      log.p(log.jpg(style.toRgbImage, ""))
     })
+    styles.toArray
   }
 
   def stayleTransfer(contentCoeff: Double, precision: Precision, contentImage: Tensor, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
     val contentOperator = new RMSContentMatcher().scale(contentCoeff)
-    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize)
+    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val trainable = new SumTrainable(((styleLayers ++ contentLayers).groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val pipelineContentLayers = pipelineLayers.filter(x => contentLayers.contains(x))
