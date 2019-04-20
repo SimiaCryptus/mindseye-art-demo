@@ -17,12 +17,13 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.util
 
 import java.awt.image.BufferedImage
 import java.net.URI
 import java.util.concurrent.TimeUnit
 
+import com.simiacryptus.mindseye.art._
 import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
@@ -172,7 +173,7 @@ object ArtUtil {
     trainingMonitor
   }
 
-  def findFiles(key: String, base: String = "s3a://simiacryptus/photos/wikiart/"): Array[String] = {
+  def findFiles(key: String, base: String = "s3a://simiacryptus/photos/"): Array[String] = {
     val itr = FileSystem.get(new URI(base), VisionPipelineUtil.getHadoopConfig()).listFiles(new Path(base), true)
     val buffer = new ArrayBuffer[String]()
     while (itr.hasNext) {

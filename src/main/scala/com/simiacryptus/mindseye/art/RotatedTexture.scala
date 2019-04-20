@@ -23,9 +23,10 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.ArtUtil._
+import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
+import com.simiacryptus.mindseye.art.util.{ArtSetup, Permutation}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.ImgBandBiasLayer
@@ -95,7 +96,7 @@ class RotatedTexture extends ArtSetup[Object] {
   val styleMagnification = 1.0
   val aspectRatio = 1.0 // (0.5+Math.sqrt(5.0/4.0))
   val stylePixelMax = 2e6
-  val rotationalSegments = 3
+  val rotationalSegments = 2
   val rotationalChannelPermutation = Permutation.roots(3, rotationalSegments).head.indices
   val tiledViewPadding = 32
   val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 512) 3 else 2))).toInt).takeWhile(_ <= 800).toArray

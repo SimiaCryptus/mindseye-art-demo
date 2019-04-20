@@ -41,7 +41,7 @@ import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
-object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object AnimatedStyleTransfer_EC2 extends AnimatedStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
   override def inputTimeoutSeconds = 600
 
@@ -55,15 +55,15 @@ object SimpleStyleTransfer_EC2 extends SimpleStyleTransfer with EC2Runner[Object
 
 }
 
-object SimpleStyleTransfer_Local extends SimpleStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
+object AnimatedStyleTransfer_Local extends AnimatedStyleTransfer with LocalRunner[Object] with NotebookRunner[Object] {
   override val contentResolution = 512
   override val styleResolution = 512
 
   override def inputTimeoutSeconds = 5
 }
 
-//abstract class SimpleStyleTransfer extends RepeatedArtSetup[Object] {
-abstract class SimpleStyleTransfer extends ArtSetup[Object] {
+//abstract class AnimatedStyleTransfer extends RepeatedArtSetup[Object] {
+abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val inputUrl = contentUrl

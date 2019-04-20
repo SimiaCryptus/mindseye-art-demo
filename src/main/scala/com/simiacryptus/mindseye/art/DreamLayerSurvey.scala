@@ -23,9 +23,10 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.ArtUtil._
+import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.RMSChannelEnhancer
 import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
+import com.simiacryptus.mindseye.art.util.ArtSetup
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer
