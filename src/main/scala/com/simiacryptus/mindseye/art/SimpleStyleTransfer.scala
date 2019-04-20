@@ -35,7 +35,7 @@ import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
@@ -77,11 +77,12 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
   val contentCoeff = 1e-4
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _log = log
     CudaSettings.INSTANCE().defaultPrecision = precision
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
     }))
-    val canvasImage = load(log, contentImage, inputUrl)
+    val canvasImage = load(contentImage, inputUrl)(log)
     var styleImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
@@ -99,8 +100,8 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
         styleOperator.build(VGG16_1c3, styleImage)
       )
     })
-    withMonitoredImage(log, canvasImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(() => canvasImage.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         val trainable = new TiledTrainable(canvasImage, tileSize, tilePadding, precision) {
           override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
             val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
@@ -126,6 +127,7 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
             .asInstanceOf[lang.Double]
         })
       })
+      null
     }
   }
 

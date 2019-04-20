@@ -38,7 +38,7 @@ import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
@@ -142,6 +142,7 @@ class IteratedTexture extends ArtSetup[Object] {
   )
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _log = log
     log.eval(() => {
       ScalaJson.toJson(Map(
         "this" -> IteratedTexture.this,
@@ -153,7 +154,7 @@ class IteratedTexture extends ArtSetup[Object] {
       log.h1(styleName)
       val styleUrl: Array[String] = findFiles(styleName)
       var canvas: Tensor = null
-      withMonitoredImage(log, () => Option(canvas).map(_.toRgbImage).orNull) {
+      withMonitoredJpg(() => Option(canvas).map(_.toRgbImage).orNull) {
         log.subreport(styleName, (sub: NotebookOutput) => {
           for (res <- resolutions) {
             sub.h1("Resolution " + res)
@@ -172,11 +173,11 @@ class IteratedTexture extends ArtSetup[Object] {
 
   def transfer_url(url: String, width: Int, styleUrl: Array[String])(implicit log: NotebookOutput): Tensor = {
     log.h2("Content")
-    var canvas = load(log, Array(width, (width * aspect).toInt), url)
+    var canvas = load(Array(width, (width * aspect).toInt), url)
     log.h2("Style")
     val styleImages = loadStyles(canvas, styleUrl)
     canvas = Tensor.fromRGB(log.eval(() => {
-      colorTransfer(canvas, styleImages, false)(log).copy().freeze().eval(canvas).getDataAndFree.getAndFree(0).toRgbImage
+      colorTransfer(canvas, styleImages, false).copy().freeze().eval(canvas).getDataAndFree.getAndFree(0).toRgbImage
     }))
     log.h2("Result")
     stayleTransfer(precision, styleImages, canvas)
@@ -223,8 +224,8 @@ class IteratedTexture extends ArtSetup[Object] {
         }
       }
     })): _*)
-    withMonitoredImage(log, canvasImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(canvasImage.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
           val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
           IterativeTrainer.wrap(trainable)

@@ -36,7 +36,7 @@ import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
@@ -155,6 +155,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
   )
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _log = log
     log.eval(() => {
       ScalaJson.toJson(Map(
         "this" -> IteratedStyleTransfer.this,
@@ -167,7 +168,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
       log.h1(styleName)
       val styleUrl: Array[String] = findFiles(styleName)
       var canvas: Tensor = null
-      withMonitoredImage(log, () => Option(canvas).map(_.toRgbImage).orNull) {
+      withMonitoredJpg(() => Option(canvas).map(_.toRgbImage).orNull) {
         log.subreport(styleName, (sub: NotebookOutput) => {
           for (res <- resolutions) {
             sub.h1("Resolution " + res)
@@ -189,7 +190,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, width)
     }))
-    var canvas = load(log, contentImage, url)
+    var canvas = load(contentImage, url)
     canvas = colorTransfer(canvas, List(contentImage), false)
       .copy().freeze().eval(canvas).getDataAndFree.getAndFree(0)
     log.h2("Style")
@@ -263,8 +264,8 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
         }
       }
     })): _*)
-    withMonitoredImage(log, canvasImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(canvasImage.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
           val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
           IterativeTrainer.wrap(trainable)

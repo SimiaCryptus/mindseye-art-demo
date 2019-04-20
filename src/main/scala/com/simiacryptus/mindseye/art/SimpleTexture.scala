@@ -37,7 +37,7 @@ import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
@@ -75,6 +75,7 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
   val maxRate: Double = 1e6
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _log = log
     val contentImage = Tensor.fromRGB(log.eval(() => {
       new Plasma().paint(contentResolution, contentResolution).toRgbImage
     }))
@@ -94,8 +95,8 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
     })
     TestUtil.graph(log, styleNetwork)
     styleNetwork.assertAlive()
-    withMonitoredImage(log, contentImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(() => contentImage.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
           val trainable = new TiledTrainable(contentImage, tileSize, 5) {
             override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
@@ -117,6 +118,7 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
             .asInstanceOf[lang.Double]
         })
       })
+      null
     }
   }
 

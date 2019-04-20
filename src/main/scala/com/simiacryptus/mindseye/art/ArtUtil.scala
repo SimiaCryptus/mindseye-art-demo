@@ -19,6 +19,7 @@
 
 package com.simiacryptus.mindseye.art
 
+import java.awt.image.BufferedImage
 import java.net.URI
 import java.util.concurrent.TimeUnit
 
@@ -27,13 +28,14 @@ import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.ImgBandBiasLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
+import com.simiacryptus.mindseye.layers.java.ImgTileAssemblyLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.line.QuadraticSearch
 import com.simiacryptus.mindseye.opt.orient.TrustRegionStrategy
 import com.simiacryptus.mindseye.opt.region.{OrthonormalConstraint, TrustRegion}
 import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
-import com.simiacryptus.notebook.NotebookOutput
+import com.simiacryptus.notebook.{NotebookOutput, NullNotebookOutput}
 import com.simiacryptus.sparkbook.NotebookRunner
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.util.{FastRandom, Util}
@@ -44,7 +46,7 @@ import scala.collection.mutable.ArrayBuffer
 
 object ArtUtil {
 
-  def pipelineGraphs(log: NotebookOutput, pipeline: VisionPipeline[VisionPipelineLayer]) = {
+  def pipelineGraphs(pipeline: VisionPipeline[VisionPipelineLayer])(implicit log: NotebookOutput) = {
     log.subreport(pipeline.name + "_Layers", (sublog: NotebookOutput) => {
       import scala.collection.JavaConverters._
       pipeline.getLayers.keySet().asScala.foreach(layer => {
@@ -55,11 +57,9 @@ object ArtUtil {
     })
   }
 
-  def load(log: NotebookOutput, content: Tensor, url: String): Tensor = {
+  def load(content: Tensor, url: String)(implicit log: NotebookOutput): Tensor = {
     val noiseRegex = "noise(.*)".r
-
-    def contentDims = content.getDimensions
-
+    val contentDims = content.getDimensions
     url match {
       case "content" => content.copy()
       case "plasma" => Tensor.fromRGB(log.eval(() => {
@@ -75,7 +75,7 @@ object ArtUtil {
   }
 
 
-  def load(log: NotebookOutput, contentDims: Array[Int], url: String): Tensor = {
+  def load(contentDims: Array[Int], url: String)(implicit log: NotebookOutput = new NullNotebookOutput()): Tensor = {
     val noiseRegex = "noise(.*)".r
     url match {
       case "plasma" => Tensor.fromRGB(log.eval(() => {
@@ -138,6 +138,21 @@ object ArtUtil {
     colorAdjustmentLayer
   }
 
+  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
+    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
+    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
+      .getDataAndFree.getAndFree(0).toRgbImage
+    assemblyLayer.freeRef()
+    grid
+  }).orNull
+
+  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
+    val history = new ArrayBuffer[StepRecord]
+    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
+      fn(getTrainingMonitor(history))
+    }
+  }
+
   def getTrainingMonitor[T](history: ArrayBuffer[StepRecord] = new ArrayBuffer[StepRecord], verbose: Boolean = true): TrainingMonitor = {
     val trainingMonitor = new TrainingMonitor() {
       override def clear(): Unit = {
@@ -155,14 +170,6 @@ object ArtUtil {
       }
     }
     trainingMonitor
-  }
-
-  def withTrainingMonitor[T](log: NotebookOutput, fn: TrainingMonitor => T) = {
-    val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredImage(log, () => Util.toImage(TestUtil.plot(history))) {
-      val trainingMonitor: TrainingMonitor = getTrainingMonitor(history)
-      fn(trainingMonitor)
-    }
   }
 
   def findFiles(key: String, base: String = "s3a://simiacryptus/photos/wikiart/"): Array[String] = {

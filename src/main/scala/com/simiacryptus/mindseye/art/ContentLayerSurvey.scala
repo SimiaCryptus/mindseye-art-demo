@@ -36,7 +36,7 @@ import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
@@ -86,11 +86,11 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
     for (layer <- pipeline.getLayers.keySet()) {
       log.h2(layer.name())
       TestUtil.graph(log, layer.getLayer.asInstanceOf[PipelineNetwork])
-      survey(log, layer)
+      survey(layer)(log)
     }
   }
 
-  def survey(log: NotebookOutput, layer: VisionPipelineLayer): Unit = {
+  def survey(layer: VisionPipelineLayer)(implicit log: NotebookOutput): Unit = {
     val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(imageUrl, contentResolution))
     val operator = new RMSContentMatcher
     val canvas = contentImage.map((v: Double) => 200 * FastRandom.INSTANCE.random())
@@ -107,8 +107,8 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
         super._free()
       }
     }
-    withMonitoredImage(log, () => canvas.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(() => canvas.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         Try {
           log.eval(() => {
             val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)

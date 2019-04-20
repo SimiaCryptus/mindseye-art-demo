@@ -38,7 +38,7 @@ import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, BisectionSearch}
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.RangeConstraint
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredImage
+import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
@@ -77,6 +77,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
   val precision = Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _log = log
 
     val contentImage = Tensor.fromRGB(log.eval(() => {
       VisionPipelineUtil.load(contentUrl, contentResolution)
@@ -86,7 +87,7 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
       VisionPipelineUtil.load(styleUrl, styleResolution)
     }))
 
-    val colorAdjustmentLayer = colorTransfer(log, contentImage, styleImage)
+    val colorAdjustmentLayer = colorTransfer(contentImage, styleImage)(log)
 
     val trainable_style = log.eval(() => {
       def styleOperator = new GramMatrixMatcher()
@@ -129,8 +130,8 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
       )
     })
 
-    withMonitoredImage(log, () => contentImage.toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(() => contentImage.toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
           val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-1)
           new IterativeTrainer(trainable_style)
@@ -146,10 +147,11 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
             .asInstanceOf[lang.Double]
         })
       })
+      null
     }
   }
 
-  def colorTransfer(log: NotebookOutput, contentImage: Tensor, styleImage: Tensor) = {
+  def colorTransfer(contentImage: Tensor, styleImage: Tensor)(implicit log: NotebookOutput): SimpleConvolutionLayer = {
     val colorAdjustmentLayer = new SimpleConvolutionLayer(1, 1, 3, 3)
     colorAdjustmentLayer.kernel.setByCoord((c: Coordinate) => {
       val coords = c.getCoords()(2)
@@ -167,8 +169,8 @@ abstract class MultiResStyleTransfer extends ArtSetup[Object] {
       }.setMutableCanvas(false)
     })
 
-    withMonitoredImage(log, () => colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
-      withTrainingMonitor(log, trainingMonitor => {
+    withMonitoredJpg(() => colorAdjustmentLayer.eval(contentImage).getDataAndFree.getAndFree(0).toRgbImage) {
+      withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
           val search = new BisectionSearch().setCurrentRate(1e0).setMaxRate(1e3).setSpanTol(1e-3)
           new IterativeTrainer(trainable_color)

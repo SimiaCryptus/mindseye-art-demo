@@ -146,6 +146,10 @@
             <artifactId>jcuda-natives</artifactId>
             <classifier>linux-x86_64</classifier>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+        </dependency>
     </dependencies>
 
 </project>
