@@ -23,11 +23,11 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.util.ArtSetup
+import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.PoolingLayer

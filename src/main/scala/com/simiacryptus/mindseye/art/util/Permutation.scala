@@ -58,8 +58,6 @@ class Permutation(val indices: Array[Int]) {
 
   def unity = Permutation.unity(rank)
 
-  def rank: Int = indices.length
-
   def matrix: RealMatrix = {
     val rank = this.rank
     val matrix = new Array2DRowRealMatrix(3, 3)
@@ -67,6 +65,8 @@ class Permutation(val indices: Array[Int]) {
     for ((x, y, v) <- tuples) matrix.setEntry(x, y, v)
     matrix
   }
+
+  def rank: Int = indices.length
 
   def ring = {
     List(this) ++ Stream.iterate(this)(_ * this).drop(1).takeWhile(_ != this)

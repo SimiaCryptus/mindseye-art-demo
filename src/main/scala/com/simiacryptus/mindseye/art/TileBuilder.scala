@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
 import com.simiacryptus.mindseye.art.util.ArtSetup
 import com.simiacryptus.mindseye.art.util.ArtUtil._
@@ -91,69 +91,12 @@ class TileBuilder extends ArtSetup[Object] {
   val stylePixelMax = 2e6
   val tiledViewPadding = 32
   val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 128) 2 else 1))).toInt).takeWhile(_ <= 300).toArray
-
-  override def cudaLog = false
-
   val styleList = Array(
     "530116339",
     "542903440"
   )
 
-  def colorCoeff(width: Int) = 1e1
-
-  def styleEnhancement(width: Int): Double = if (width < 128) 1e1 else if (width < 200) 1e0 else 0
-
-  def evaluationTileSize(precision: Precision) = if (precision == Precision.Double) 256 else 512
-
-  def precision(width: Int) = if (width < 128) Precision.Double else Precision.Float
-
-  def styleLayers: Seq[VisionPipelineLayer] = List(
-    //    Inc5H_1a,
-    //    Inc5H_2a,
-    //    Inc5H_3a,
-    //    Inc5H_3b,
-    //    Inc5H_4a,
-    //    Inc5H_4b,
-    //    Inc5H_4c,
-    //Inc5H_4d,
-    //Inc5H_4e,
-    //Inc5H_5a,
-    //Inc5H_5b,
-
-//    VGG16_0,
-//    VGG16_1a,
-    VGG16_1b1,
-    VGG16_1b2,
-    VGG16_1c1,
-    VGG16_1c2,
-    VGG16_1c3,
-    VGG16_1d1,
-    VGG16_1d2,
-    VGG16_1d3,
-    VGG16_1e1,
-    VGG16_1e2,
-    VGG16_1e3
-    //    VGG16_2
-
-    //    VGG19_0,
-    //    VGG19_1a1,
-    //    VGG19_1a2,
-    //    VGG19_1b1,
-    //    VGG19_1b2,
-    //    VGG19_1c1,
-    //    VGG19_1c2,
-    //    VGG19_1c3,
-    //    VGG19_1c4,
-    //    VGG19_1d1,
-    //    VGG19_1d2,
-    //    VGG19_1d3,
-    //    VGG19_1d4,
-    //    VGG19_1e1,
-    //    VGG19_1e2,
-    //    VGG19_1e3,
-    //    VGG19_1e4
-    //    VGG19_2
-  )
+  override def cudaLog = false
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
@@ -163,17 +106,17 @@ class TileBuilder extends ArtSetup[Object] {
       ))
     })
     log.h1("Basic Textures")
-    val basicTextures: Map[String, Tensor] = (for (styleName <- styleList) yield {
+    val basicTextures: Map[String, Map[Int, Tensor]] = (for (styleName <- styleList) yield {
       log.h2(styleName)
-      val canvas = paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
+      styleName -> paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
         new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
           .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
       })(log)
-      styleName -> canvas
     }).toMap
     log.eval(() => {
-      ScalaJson.toJson(basicTextures.mapValues(img => log.jpg(img.toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")")))
+      ScalaJson.toJson(basicTextures.mapValues(_.mapValues(img => log.jpg(img.toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")"))))
     })
+    colorCoeff = (width: Int) => 1e-1
     log.h1("Intermediate Textures")
     val intermediateTextures = (for (styleName <- styleList) yield {
       log.h2(styleName)
@@ -191,34 +134,33 @@ class TileBuilder extends ArtSetup[Object] {
           "right" -> rightStyle
         )
         log.p(ScalaJson.toJson(key))
-        val canvas = paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
-          val bottom = TestUtil.resize(bottomImage.toRgbImage, canvasDims(0), true)
-          val top = TestUtil.resize(topImage.toRgbImage, canvasDims(0), true)
-          val left = TestUtil.resize(leftImage.toRgbImage, canvasDims(0), true)
-          val right = TestUtil.resize(rightImage.toRgbImage, canvasDims(0), true)
-          val network = new PipelineNetwork(1)
-          network.wrap(new ImgTileAssemblyLayer(3, 3),
-            network.wrap(new ValueLayer(selectRight(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectBottom(top, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectLeft(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectRight(left, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.getInput(0),
-            network.wrap(new ValueLayer(selectLeft(right, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectRight(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectTop(bottom, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectLeft(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*)
-          )
-          network
-        })(log)
         key ++ Map(
-          "img" -> canvas
+          "img" -> paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
+            val bottom = TestUtil.resize(bottomImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val top = TestUtil.resize(topImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val left = TestUtil.resize(leftImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val right = TestUtil.resize(rightImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val network = new PipelineNetwork(1)
+            network.wrap(new ImgTileAssemblyLayer(3, 3),
+              network.wrap(new ValueLayer(selectRight(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectBottom(top, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectLeft(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectRight(left, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.getInput(0),
+              network.wrap(new ValueLayer(selectLeft(right, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectRight(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectTop(bottom, tiledViewPadding)), Array.empty[DAGNode]: _*),
+              network.wrap(new ValueLayer(selectLeft(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*)
+            )
+            network
+          })(log)
         )
       }
     }).flatten.toList
     log.eval(() => {
       ScalaJson.toJson(intermediateTextures.map(m => {
         m ++ Map(
-          "img" -> log.jpg(m("img").asInstanceOf[Tensor].toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")")
+          "img" -> m("img").asInstanceOf[Map[Int, Tensor]].mapValues(x => log.jpg(x.toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")"))
         )
       }))
     })
@@ -235,10 +177,10 @@ class TileBuilder extends ArtSetup[Object] {
     }
 
     val str = ScalaJson.toJson(Map(
-      "basic" -> basicTextures.mapValues(getImage(_)),
+      "basic" -> basicTextures.mapValues(_.mapValues(getImage(_))),
       "intermediate" -> intermediateTextures.map(m => {
         m ++ Map(
-          "img" -> getImage(m("img").asInstanceOf[Tensor])
+          "img" -> m("img").asInstanceOf[Map[Int, Tensor]].mapValues(getImage(_))
         )
       })
     ))
@@ -264,9 +206,9 @@ class TileBuilder extends ArtSetup[Object] {
 
     withMonitoredJpg(() => Option(canvas).map(_.toImage).orNull) {
       withMonitoredJpg(() => currentImage) {
-        log.subreport(styleName, (sub: NotebookOutput) => {
+        log.subreport[Map[Int, Tensor]](styleName, (sub: NotebookOutput) => {
           implicit val _log = sub
-          for (width <- resolutions) {
+          (for (width <- resolutions) yield {
             CudaSettings.INSTANCE().defaultPrecision = precision(width)
             sub.h1("Resolution " + width)
             if (null == canvas) {
@@ -280,13 +222,14 @@ class TileBuilder extends ArtSetup[Object] {
               postPaintLayer.addRef(),
               new BoundedActivationLayer().setMinValue(0).setMaxValue(256)
             ))(_log)
-          }
-          null
+            width -> canvas.copy()
+          }).toMap
         })
-        canvas
       }
     }
   }
+
+  def precision(width: Int) = if (width < 128) Precision.Double else Precision.Float
 
   def loadStyles(contentImage: Tensor, styleUrl: String*) = {
     val styles = Random.shuffle(styleUrl.toList).map(styleUrl => {
@@ -350,6 +293,60 @@ class TileBuilder extends ArtSetup[Object] {
     canvasImage
   }
 
+  protected var colorCoeff = (width: Int) => 1e1
+
+  def styleEnhancement(width: Int): Double = if (width < 128) 1e1 else if (width < 200) 1e0 else 0
+
+  def evaluationTileSize(precision: Precision) = if (precision == Precision.Double) 256 else 512
+
+  def styleLayers: Seq[VisionPipelineLayer] = List(
+    //    Inc5H_1a,
+    //    Inc5H_2a,
+    //    Inc5H_3a,
+    //    Inc5H_3b,
+    //    Inc5H_4a,
+    //    Inc5H_4b,
+    //    Inc5H_4c,
+    //Inc5H_4d,
+    //Inc5H_4e,
+    //Inc5H_5a,
+    //Inc5H_5b,
+
+    //    VGG16_0,
+    //    VGG16_1a,
+    VGG16_1b1,
+    VGG16_1b2,
+    VGG16_1c1,
+    VGG16_1c2,
+    VGG16_1c3,
+    VGG16_1d1,
+    VGG16_1d2,
+    VGG16_1d3,
+    VGG16_1e1,
+    VGG16_1e2,
+    VGG16_1e3
+    //    VGG16_2
+
+    //    VGG19_0,
+    //    VGG19_1a1,
+    //    VGG19_1a2,
+    //    VGG19_1b1,
+    //    VGG19_1b2,
+    //    VGG19_1c1,
+    //    VGG19_1c2,
+    //    VGG19_1c3,
+    //    VGG19_1c4,
+    //    VGG19_1d1,
+    //    VGG19_1d2,
+    //    VGG19_1d3,
+    //    VGG19_1d4,
+    //    VGG19_1e1,
+    //    VGG19_1e2,
+    //    VGG19_1e3,
+    //    VGG19_1e4
+    //    VGG19_2
+  )
+
   def selectBottom(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = img.getHeight - size
@@ -366,6 +363,13 @@ class TileBuilder extends ArtSetup[Object] {
     selectRegion(img, positionX, positionY, width, height)
   }
 
+  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
+    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
+    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
+    tileSelectLayer.freeRef()
+    result
+  }
+
   def selectLeft(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = 0
@@ -380,13 +384,6 @@ class TileBuilder extends ArtSetup[Object] {
     val width = size
     val height = img.getHeight
     selectRegion(img, positionX, positionY, width, height)
-  }
-
-  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
-    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
-    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
-    tileSelectLayer.freeRef()
-    result
   }
 
 }

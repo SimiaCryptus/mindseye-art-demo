@@ -23,9 +23,9 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
+import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, Permutation}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
@@ -273,6 +273,30 @@ class RotatedTexture extends ArtSetup[Object] {
 
   def evaluationTileSize(precision: Precision) = if (precision == Precision.Double) 256 else 512
 
+  def getKaleidoscope(canvasDims: Array[Int]) = {
+    val permutation = Permutation(this.rotationalChannelPermutation: _*)
+    require(permutation.unity == (permutation ^ rotationalSegments), s"$permutation ^ $rotationalSegments => ${(permutation ^ rotationalSegments)} != ${permutation.unity}")
+    val network = new PipelineNetwork(1)
+    network.add(new SumInputsLayer(), (0 until rotationalSegments)
+      .map(segment => {
+        if (0 == segment) network.getInput(0) else {
+          network.wrap(
+            getRotor(segment * 2 * Math.PI / rotationalSegments, canvasDims).setChannelSelector((permutation ^ segment).indices: _*),
+            network.getInput(0)
+          )
+        }
+      }): _*).freeRef()
+    network.wrap(new LinearActivationLayer().setScale(1.0 / rotationalSegments).freeze()).freeRef()
+    network
+  }
+
+  def getRotor(radians: Double, canvasDims: Array[Int]) = {
+    new ImgViewLayer(canvasDims(0), canvasDims(1), true)
+      .setRotationCenterX(canvasDims(0) / 2)
+      .setRotationCenterY(canvasDims(1) / 2)
+      .setRotationRadians(radians)
+  }
+
   def styleLayers: Seq[VisionPipelineLayer] = List(
     //    Inc5H_1a,
     //    Inc5H_2a,
@@ -320,29 +344,5 @@ class RotatedTexture extends ArtSetup[Object] {
     //    VGG19_1e4
     //    VGG19_2
   )
-
-  def getKaleidoscope(canvasDims: Array[Int]) = {
-    val permutation = Permutation(this.rotationalChannelPermutation: _*)
-    require(permutation.unity == (permutation ^ rotationalSegments), s"$permutation ^ $rotationalSegments => ${(permutation ^ rotationalSegments)} != ${permutation.unity}")
-    val network = new PipelineNetwork(1)
-    network.add(new SumInputsLayer(), (0 until rotationalSegments)
-      .map(segment => {
-        if (0 == segment) network.getInput(0) else {
-          network.wrap(
-            getRotor(segment * 2 * Math.PI / rotationalSegments, canvasDims).setChannelSelector((permutation ^ segment).indices: _*),
-            network.getInput(0)
-          )
-        }
-      }): _*).freeRef()
-    network.wrap(new LinearActivationLayer().setScale(1.0 / rotationalSegments).freeze()).freeRef()
-    network
-  }
-
-  def getRotor(radians: Double, canvasDims: Array[Int]) = {
-    new ImgViewLayer(canvasDims(0), canvasDims(1), true)
-      .setRotationCenterX(canvasDims(0) / 2)
-      .setRotationCenterY(canvasDims(1) / 2)
-      .setRotationRadians(radians)
-  }
 }
 
