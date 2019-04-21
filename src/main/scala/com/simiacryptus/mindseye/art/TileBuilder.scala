@@ -21,10 +21,12 @@ package com.simiacryptus.mindseye.art
 
 import java.awt.image.BufferedImage
 import java.lang
+import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher}
+import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
 import com.simiacryptus.mindseye.art.util.ArtSetup
 import com.simiacryptus.mindseye.art.util.ArtUtil._
@@ -45,6 +47,8 @@ import com.simiacryptus.sparkbook.NotebookRunner._
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
+import javax.imageio.ImageIO
+import org.apache.commons.io.IOUtils
 
 import scala.util.Random
 
@@ -79,14 +83,14 @@ class TileBuilder extends ArtSetup[Object] {
   val seed = "plasma"
   val trainingMinutes: Int = 60
   val epochIterations: Int = 5
-  val trainingEpochs: Int = 5
+  val trainingEpochs: Int = 3
   val maxRate = 1e10
   val tiledEvaluationPadding = 32
   val styleMagnification = 5.0
   val aspectRatio = 1.0
   val stylePixelMax = 2e6
   val tiledViewPadding = 32
-  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 256) 2 else 1))).toInt).takeWhile(_ <= 200).toArray
+  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 128) 2 else 1))).toInt).takeWhile(_ <= 300).toArray
 
   override def cudaLog = false
 
@@ -95,11 +99,13 @@ class TileBuilder extends ArtSetup[Object] {
     "542903440"
   )
 
-  def colorCoeff(width: Int) = 1e0
+  def colorCoeff(width: Int) = 1e1
 
-  def styleEnhancement(width: Int): Double = if (width < 200) 1e1 else if (width < 300) 1e0 else 0
+  def styleEnhancement(width: Int): Double = if (width < 128) 1e1 else if (width < 200) 1e0 else 0
 
   def evaluationTileSize(precision: Precision) = if (precision == Precision.Double) 256 else 512
+
+  def precision(width: Int) = if (width < 128) Precision.Double else Precision.Float
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
     //    Inc5H_1a,
@@ -114,8 +120,8 @@ class TileBuilder extends ArtSetup[Object] {
     //Inc5H_5a,
     //Inc5H_5b,
 
-    VGG16_0,
-    VGG16_1a,
+//    VGG16_0,
+//    VGG16_1a,
     VGG16_1b1,
     VGG16_1b2,
     VGG16_1c1,
@@ -159,13 +165,14 @@ class TileBuilder extends ArtSetup[Object] {
     log.h1("Basic Textures")
     val basicTextures: Map[String, Tensor] = (for (styleName <- styleList) yield {
       log.h2(styleName)
-      styleName -> paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
+      val canvas = paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
         new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
           .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
       })(log)
+      styleName -> canvas
     }).toMap
     log.eval(() => {
-      basicTextures.mapValues(img => log.jpg(img.toRgbImage, ""))
+      ScalaJson.toJson(basicTextures.mapValues(img => log.jpg(img.toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")")))
     })
     log.h1("Intermediate Textures")
     val intermediateTextures = (for (styleName <- styleList) yield {
@@ -176,38 +183,72 @@ class TileBuilder extends ArtSetup[Object] {
         (leftStyle, leftImage) <- basicTextures;
         (rightStyle, rightImage) <- basicTextures
       ) yield {
-        log.out("Left: " + leftStyle)
-        log.out("Right: " + rightStyle)
-        log.out("Top: " + topStyle)
-        log.out("Bottom: " + bottomStyle)
-        Map(
+        val key = Map(
           "primary" -> styleName,
           "top" -> topStyle,
           "bottom" -> bottomStyle,
           "left" -> leftStyle,
           "right" -> rightStyle
-        ) -> paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
-          val upperImage: BufferedImage = topImage.toRgbImage
-          val lowerImage = bottomImage.toRgbImage
+        )
+        log.p(ScalaJson.toJson(key))
+        val canvas = paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
+          val bottom = TestUtil.resize(bottomImage.toRgbImage, canvasDims(0), true)
+          val top = TestUtil.resize(topImage.toRgbImage, canvasDims(0), true)
+          val left = TestUtil.resize(leftImage.toRgbImage, canvasDims(0), true)
+          val right = TestUtil.resize(rightImage.toRgbImage, canvasDims(0), true)
           val network = new PipelineNetwork(1)
           network.wrap(new ImgTileAssemblyLayer(3, 3),
-            network.wrap(new ValueLayer(selectRight(selectBottom(upperImage, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectBottom(upperImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectLeft(selectBottom(upperImage, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectRight(leftImage.toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectRight(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectBottom(top, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectLeft(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectRight(left, tiledViewPadding)), Array.empty[DAGNode]: _*),
             network.getInput(0),
-            network.wrap(new ValueLayer(selectLeft(rightImage.toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectRight(selectTop(lowerImage, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectTop(lowerImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
-            network.wrap(new ValueLayer(selectLeft(selectTop(lowerImage, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*)
+            network.wrap(new ValueLayer(selectLeft(right, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectRight(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectTop(bottom, tiledViewPadding)), Array.empty[DAGNode]: _*),
+            network.wrap(new ValueLayer(selectLeft(selectTop(bottom, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*)
           )
           network
         })(log)
+        key ++ Map(
+          "img" -> canvas
+        )
       }
-    }).flatten.toMap
+    }).flatten.toList
     log.eval(() => {
-      intermediateTextures.mapValues(img => log.jpg(img.toRgbImage, ""))
+      ScalaJson.toJson(intermediateTextures.map(m => {
+        m ++ Map(
+          "img" -> log.jpg(m("img").asInstanceOf[Tensor].toRgbImage, "").split("\\(").drop(1).head.stripSuffix(")")
+        )
+      }))
     })
+
+    val zipName = "textures.zip"
+    val zipFileOut = new ZipOutputStream(log.file(zipName))
+
+    def getImage(img: Tensor) = {
+      val id = UUID.randomUUID().toString + ".jpg"
+      zipFileOut.putNextEntry(new ZipEntry(id))
+      ImageIO.write(img.toRgbImage, "jpg", zipFileOut)
+      zipFileOut.closeEntry()
+      id
+    }
+
+    val str = ScalaJson.toJson(Map(
+      "basic" -> basicTextures.mapValues(getImage(_)),
+      "intermediate" -> intermediateTextures.map(m => {
+        m ++ Map(
+          "img" -> getImage(m("img").asInstanceOf[Tensor])
+        )
+      })
+    ))
+    zipFileOut.putNextEntry(new ZipEntry("texture.json"))
+    IOUtils.write(str, zipFileOut, "UTF-8")
+    zipFileOut.closeEntry()
+    zipFileOut.finish()
+    zipFileOut.close()
+    log.p("[%s](etc/%s)", zipName, zipName)
+
     null
   }
 
@@ -230,7 +271,6 @@ class TileBuilder extends ArtSetup[Object] {
             sub.h1("Resolution " + width)
             if (null == canvas) {
               canvas = load(Array(width, (width * aspectRatio).toInt), seed)()
-              //canvas = Tensor.fromRGB(colorTransfer(canvas, styleImages, false).eval(canvas).getDataAndFree.getAndFree(0).toRgbImage)
             } else {
               canvas = Tensor.fromRGB(TestUtil.resize(canvas.toRgbImage(), width, true))
             }
@@ -248,8 +288,6 @@ class TileBuilder extends ArtSetup[Object] {
     }
   }
 
-  def precision(width: Int) = if (width < 300) Precision.Double else Precision.Float
-
   def loadStyles(contentImage: Tensor, styleUrl: String*) = {
     val styles = Random.shuffle(styleUrl.toList).map(styleUrl => {
       var styleImage = VisionPipelineUtil.load(styleUrl, -1)
@@ -265,12 +303,12 @@ class TileBuilder extends ArtSetup[Object] {
     styles.toArray
   }
 
-  private def styleTransfer(precision: Precision, styleImage: Seq[Tensor], colorImage: Seq[Tensor], canvasImage: Tensor, borderLayer: PipelineNetwork)(implicit log: NotebookOutput) = {
+  def styleTransfer(precision: Precision, styleImage: Seq[Tensor], colorImage: Seq[Tensor], canvasImage: Tensor, borderLayer: PipelineNetwork)(implicit log: NotebookOutput) = {
     val canvasDims = canvasImage.getDimensions()
     val currentTileSize = evaluationTileSize(precision)
     val styleOperator = new GramMatrixMatcher().setTileSize(currentTileSize)
       .combine(new GramMatrixEnhancer().setTileSize(currentTileSize).scale(styleEnhancement(canvasDims(0))))
-    val colorOperator = new GramMatrixMatcher().setTileSize(currentTileSize).scale(colorCoeff(canvasDims(0)))
+    val colorOperator = new GramMatrixMatcher().setTileSize(currentTileSize).combine(new ChannelMeanMatcher).scale(colorCoeff(canvasDims(0)))
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine((
@@ -351,11 +389,5 @@ class TileBuilder extends ArtSetup[Object] {
     result
   }
 
-  def getRotor(radians: Double, canvasDims: Array[Int]) = {
-    new ImgViewLayer(canvasDims(0), canvasDims(1), true)
-      .setRotationCenterX(canvasDims(0) / 2)
-      .setRotationCenterY(canvasDims(1) / 2)
-      .setRotationRadians(radians)
-  }
 }
 

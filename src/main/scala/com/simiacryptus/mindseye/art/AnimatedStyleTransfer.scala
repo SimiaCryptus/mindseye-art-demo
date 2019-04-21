@@ -24,9 +24,9 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.util.ArtSetup
+import com.simiacryptus.mindseye.art.util.{ArtSetup, ArtUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
@@ -39,7 +39,7 @@ import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
-import com.simiacryptus.sparkbook.util.LocalRunner
+import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
 
 object AnimatedStyleTransfer_EC2 extends AnimatedStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -62,7 +62,6 @@ object AnimatedStyleTransfer_Local extends AnimatedStyleTransfer with LocalRunne
   override def inputTimeoutSeconds = 5
 }
 
-//abstract class AnimatedStyleTransfer extends RepeatedArtSetup[Object] {
 abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
 
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
@@ -75,44 +74,116 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
   val tileSize = 512
   val tilePadding = 8
   val maxRate = 1e10
-  val contentCoeff = 1e-4
+  def styleLayers: Seq[VisionPipelineLayer] = List(
+    //    Inc5H_1a,
+    //    Inc5H_2a,
+    //    Inc5H_3a,
+    //    Inc5H_3b,
+    //    Inc5H_4a,
+    //    Inc5H_4b,
+    //    Inc5H_4c,
+    //Inc5H_4d,
+    //Inc5H_4e,
+    //Inc5H_5a,
+    //Inc5H_5b,
+
+    //    VGG16_0,
+    //    VGG16_1a,
+    VGG16_1b1,
+    VGG16_1b2,
+    VGG16_1c1,
+    VGG16_1c2,
+    VGG16_1c3,
+    VGG16_1d1,
+    VGG16_1d2,
+    VGG16_1d3,
+    VGG16_1e1,
+    VGG16_1e2,
+    VGG16_1e3
+    //    VGG16_2
+
+    //    VGG19_0,
+    //    VGG19_1a1,
+    //    VGG19_1a2,
+    //    VGG19_1b1,
+    //    VGG19_1b2,
+    //    VGG19_1c1,
+    //    VGG19_1c2,
+    //    VGG19_1c3,
+    //    VGG19_1c4,
+    //    VGG19_1d1,
+    //    VGG19_1d2,
+    //    VGG19_1d3,
+    //    VGG19_1d4,
+    //    VGG19_1e1,
+    //    VGG19_1e2,
+    //    VGG19_1e3,
+    //    VGG19_1e4
+    //    VGG19_2
+  )
+
+  def precision = Precision.Double
 
   override def postConfigure(log: NotebookOutput) = {
+    log.eval(() => {
+      ScalaJson.toJson(Map(
+        "this" -> AnimatedStyleTransfer.this,
+        "style" -> styleLayers.map(_.name())
+      ))
+    })
     implicit val _log = log
     CudaSettings.INSTANCE().defaultPrecision = precision
-    val contentImage = Tensor.fromRGB(log.eval(() => {
-      VisionPipelineUtil.load(contentUrl, contentResolution)
-    }))
-    val canvasImage = load(contentImage, inputUrl)(log)
-    var styleImage = Tensor.fromRGB(log.eval(() => {
-      VisionPipelineUtil.load(styleUrl, styleResolution)
-    }))
-    styleImage = colorTransfer(styleImage, List(contentImage), false)(log)
-      .copy().freeze().eval(styleImage).getDataAndFree.getAndFree(0)
-    val contentOperator = new RMSContentMatcher().scale(contentCoeff)
-    val styleOperator = new GramMatrixMatcher()
-    val styleNetwork: PipelineNetwork = log.eval(() => {
-      SumInputsLayer.combine(
-        styleOperator.build(VGG16_0, styleImage),
-        styleOperator.build(VGG16_1a, styleImage),
-        styleOperator.build(VGG16_1b1, styleImage),
-        styleOperator.build(VGG16_1b2, styleImage),
-        styleOperator.build(VGG16_1c2, styleImage),
-        styleOperator.build(VGG16_1c3, styleImage)
+    val styleCoeffMin = 1e0
+    val styleCoeffMax = 1e2
+    val frames = for(styleCoeff <- Stream.iterate(styleCoeffMin)(_*Math.pow(2,1.0/1)).takeWhile(_<styleCoeffMax)) yield {
+      val contentImage = Tensor.fromRGB(log.eval(() => {
+        VisionPipelineUtil.load(contentUrl, contentResolution)
+      }))
+      ilovemonkeys(
+        styleImage = adjColor(contentImage, Tensor.fromRGB(log.eval(() => {
+          VisionPipelineUtil.load(styleUrl, styleResolution)
+        }))),
+        canvasImage = load(contentImage, inputUrl),
+        contentImage = contentImage,
+        styleCoeff = styleCoeff,
+        colorCoeff = 1e1,
+        contentCoeff = 1e-4,
+        currentTileSize = 300
       )
-    })
+      contentImage
+    }
+    NotebookRunner.withMonitoredGif(()=>frames.map(_.toRgbImage)){null}
+  }
+
+  def adjColor(contentImage: Tensor, styleImage: Tensor) = {
+    colorTransfer(styleImage, List(contentImage), true)
+      .copy().freeze().eval(styleImage).getDataAndFree.getAndFree(0)
+  }
+
+  def ilovemonkeys(styleImage: Tensor, canvasImage: Tensor, contentImage: Tensor, styleCoeff: Double, colorCoeff: Double, contentCoeff: Double, currentTileSize: Int)(implicit log: NotebookOutput) = {
+    val contentOperator = new RMSContentMatcher().scale(contentCoeff)
+    val styleOperator = new GramMatrixMatcher().setTileSize(currentTileSize)
+      .combine(new GramMatrixEnhancer().setTileSize(currentTileSize).scale(styleCoeff))
+    val colorOperator = new GramMatrixMatcher().setTileSize(currentTileSize).combine(new ChannelMeanMatcher).scale(colorCoeff)
+    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
+      val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
+      val styleNetwork = SumInputsLayer.combine((
+        pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage)) ++ List(
+          colorOperator.build(styleImage)
+        )): _*)
+      new TiledTrainable(canvasImage, currentTileSize, 32, precision) {
+        override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
+          val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
+          regionSelector.freeRef()
+          MultiPrecision.setPrecision(SumInputsLayer.combine(
+            styleNetwork.addRef(),
+            contentOperator.build(VGG16_1c1, contentTile)
+          ), precision).freeze().asInstanceOf[PipelineNetwork]
+        }
+      }
+    })): _*)
     withMonitoredJpg(() => canvasImage.toRgbImage) {
       withTrainingMonitor(trainingMonitor => {
-        val trainable = new TiledTrainable(canvasImage, tileSize, tilePadding, precision) {
-          override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-            val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
-            regionSelector.freeRef()
-            MultiPrecision.setPrecision(SumInputsLayer.combine(
-              styleNetwork.addRef(),
-              contentOperator.build(VGG16_1c1, contentTile)
-            ), precision).freeze().asInstanceOf[PipelineNetwork]
-          }
-        }
         log.eval(() => {
           val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
           new IterativeTrainer(trainable)
@@ -131,7 +202,5 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
       null
     }
   }
-
-  def precision = Precision.Double
 
 }
