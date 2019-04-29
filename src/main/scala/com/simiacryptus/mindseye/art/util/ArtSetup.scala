@@ -19,7 +19,6 @@
 
 package com.simiacryptus.mindseye.art.util
 
-import com.simiacryptus.mindseye.art.VisionPipelineUtil
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.{MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.{InteractiveSetup, RepeatedInteractiveSetup}

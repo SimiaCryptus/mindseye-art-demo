@@ -21,20 +21,21 @@ package com.simiacryptus.mindseye.art
 
 import java.lang
 import java.util.concurrent.TimeUnit
+import java.util.stream.Collectors
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.{GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.util.ArtSetup
+import com.simiacryptus.mindseye.art.ops.{GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
+import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.mindseye.opt.IterativeTrainer
-import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
-import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
-import com.simiacryptus.mindseye.opt.region.RangeConstraint
+import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, LineSearchCursor}
+import com.simiacryptus.mindseye.opt.orient.{LBFGS, OrientationStrategy, TrustRegionStrategy}
+import com.simiacryptus.mindseye.opt.region.{CompoundRegion, FixedMagnitudeConstraint, RangeConstraint}
 import com.simiacryptus.mindseye.test.TestUtil
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
@@ -42,6 +43,7 @@ import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
 
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 object IteratedStyleTransfer_EC2 extends IteratedStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
@@ -65,11 +67,11 @@ object IteratedStyleTransfer_Local extends IteratedStyleTransfer with LocalRunne
 class IteratedStyleTransfer extends ArtSetup[Object] {
 
   val styleList = Array(
+    "pablo-picasso",
     "antonio-jacobsen",
     "albert-bierstadt",
     "arkhip-kuindzhi",
     "bartolome-esteban-murillo",
-    "pablo-picasso",
     "rembrandt",
     "allan-d-arcangelo",
     "david-bates",
@@ -77,24 +79,22 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     "jacopo-bassano",
     "henri-rousseau"
   )
-  val contentUrl = "file:///C:/Users/andre/Downloads/photos (1)/04-15-2019_13_44/P6.jpg"
+  val contentUrl = "file:///C:/Users/andre/Downloads/IMG_20181031_164826422.jpg"
   val inputUrl = "content"
   val contentCoeff = 1e2
-
-  val maxRate = 1e10
+  val maxRate = 1e6
   val trainingMinutes: Int = 60
-  val trainingIterations: Int = 20
+  val trainingIterations: Int = 10
+  val trainingEpochs = 3
   val tileSize = 480
   val tilePadding = 32
-
   val balanceColor = false
   val colorBalanceRes = 320
-
   val styleMagnification = 1.0
   val styleMin = 64
   val styleMax = 1280
   val stylePixelMax = 5e6
-  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(2.0, 1.0 / (if (x < 600) 3 else 2))).toInt).takeWhile(_ <= 1280).toArray
+  val resolutions: Array[Int] = Stream.iterate(128)(x => (x * Math.pow(2.0, 1.0 / (if (x < 600) 2 else 1))).toInt).takeWhile(_ <= 1280).toArray
 
   def styleEnhancement(width: Int): Double = if (width < 300) 1e1 else if (width < 800) 1e0 else 0
 
@@ -135,7 +135,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     //    VGG16_2,
 
     //    VGG19_0,
-    //    VGG19_1a1,
+    //    VGG19_1a,
     //    VGG19_1a2,
     //    VGG19_1b1,
     //    VGG19_1b2,
@@ -197,7 +197,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     log.h2("Style")
     val styleImage = loadStyles(balanceColor, contentImage, styleUrl)
     log.h2("Result")
-    stayleTransfer(contentCoeff, precision, contentImage, styleImage, canvas)
+    styleTransfer(contentCoeff, precision, contentImage, styleImage, canvas)
   }
 
   def transfer_img(img: Tensor, width: Int, balanceColor: Boolean, styleUrl: Array[String])(implicit log: NotebookOutput): Tensor = {
@@ -209,7 +209,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     log.h2("Style")
     val styleImage = loadStyles(balanceColor, contentImage, styleUrl)
     log.h2("Result")
-    stayleTransfer(contentCoeff, precision, contentImage, styleImage, canvas)
+    styleTransfer(contentCoeff, precision, contentImage, styleImage, canvas)
   }
 
   def loadStyles(balanceColor: Boolean, contentImage: Tensor, styleUrl: Array[String])(implicit log: NotebookOutput) = {
@@ -237,7 +237,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
     styles.toArray
   }
 
-  def stayleTransfer(contentCoeff: Double, precision: Precision, contentImage: Tensor, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
+  def styleTransfer(contentCoeff: Double, precision: Precision, contentImage: Tensor, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
     val contentOperator = new RMSContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val trainable = new SumTrainable(((styleLayers ++ contentLayers).groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
@@ -265,14 +265,21 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
         }
       }
     })): _*)
-    withMonitoredJpg(canvasImage.toRgbImage) {
-      withTrainingMonitor(trainingMonitor => {
+    withTrainingMonitor(trainingMonitor => {
+      val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
+      val orientation = new TrustRegionStrategy(new LBFGS) {
+        override def getRegionPolicy(layer: Layer) = new CompoundRegion(
+          new RangeConstraint().setMin(0).setMax(256),
+          new FixedMagnitudeConstraint(canvasImage.coordStream(true)
+            .collect(Collectors.toList()).asScala
+            .groupBy(_.getCoords()(2)).values
+            .toArray.map(_.map(_.getIndex).toArray): _*)
+        )
+      }
+      for (i <- 0 to trainingEpochs) withMonitoredJpg(canvasImage.toRgbImage) {
         log.eval(() => {
-          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
-          IterativeTrainer.wrap(trainable)
-            .setOrientation(new TrustRegionStrategy(new LBFGS) {
-              override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0).setMax(256)
-            })
+          new IterativeTrainer(trainable)
+            .setOrientation(orientation.addRef().asInstanceOf[OrientationStrategy[_ <: LineSearchCursor]])
             .setMonitor(trainingMonitor)
             .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
@@ -281,8 +288,8 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
             .runAndFree
             .asInstanceOf[lang.Double]
         })
-      })
-    }
+      }
+    })
     canvasImage
   }
 

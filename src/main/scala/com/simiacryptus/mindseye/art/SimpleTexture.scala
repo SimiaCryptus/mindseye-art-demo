@@ -23,11 +23,11 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
+import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.util.RepeatedArtSetup
+import com.simiacryptus.mindseye.art.util.{Plasma, RepeatedArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
@@ -89,7 +89,7 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
         styleOperator.build(Inc5H_1a, styleImage),
         styleOperator.build(Inc5H_2a, styleImage),
         styleOperator.build(Inc5H_3b, styleImage),
-        styleOperator.build(VGG19_1a1, styleImage),
+        styleOperator.build(VGG19_1a, styleImage),
         styleOperator.build(VGG19_1b1, styleImage),
         styleOperator.build(VGG19_1c1, styleImage)
       ), Precision.Float).asInstanceOf[PipelineNetwork]

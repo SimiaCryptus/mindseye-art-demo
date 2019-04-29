@@ -24,7 +24,7 @@ import java.net.URI
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.mindseye.art._
-import com.simiacryptus.mindseye.art.constraints.GramMatrixMatcher
+import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.ImgBandBiasLayer
@@ -183,4 +183,5 @@ object ArtUtil {
     }
     buffer.toArray
   }
+
 }

@@ -26,10 +26,10 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.util.ArtSetup
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
+import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, LayerBase, Tensor}
 import com.simiacryptus.mindseye.layers.ValueLayer
@@ -95,6 +95,7 @@ class TileBuilder extends ArtSetup[Object] {
     "530116339",
     "542903440"
   )
+  protected var colorCoeff = (width: Int) => 1e1
 
   override def cudaLog = false
 
@@ -293,8 +294,6 @@ class TileBuilder extends ArtSetup[Object] {
     canvasImage
   }
 
-  protected var colorCoeff = (width: Int) => 1e1
-
   def styleEnhancement(width: Int): Double = if (width < 128) 1e1 else if (width < 200) 1e0 else 0
 
   def evaluationTileSize(precision: Precision) = if (precision == Precision.Double) 256 else 512
@@ -328,7 +327,7 @@ class TileBuilder extends ArtSetup[Object] {
     //    VGG16_2
 
     //    VGG19_0,
-    //    VGG19_1a1,
+    //    VGG19_1a,
     //    VGG19_1a2,
     //    VGG19_1b1,
     //    VGG19_1b2,
@@ -363,19 +362,19 @@ class TileBuilder extends ArtSetup[Object] {
     selectRegion(img, positionX, positionY, width, height)
   }
 
-  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
-    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
-    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
-    tileSelectLayer.freeRef()
-    result
-  }
-
   def selectLeft(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = 0
     val width = size
     val height = img.getHeight
     selectRegion(img, positionX, positionY, width, height)
+  }
+
+  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
+    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
+    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
+    tileSelectLayer.freeRef()
+    result
   }
 
   def selectRight(img: BufferedImage, size: Int) = {

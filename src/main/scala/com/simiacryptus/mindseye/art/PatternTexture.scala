@@ -23,9 +23,8 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
+import com.simiacryptus.mindseye.art.ops._
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
@@ -45,7 +44,7 @@ import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
 
 import scala.util.Random
 
-object IteratedTexture_EC2 extends IteratedTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object PatternTexture_EC2 extends PatternTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
   override def inputTimeoutSeconds = 600
 
@@ -59,11 +58,11 @@ object IteratedTexture_EC2 extends IteratedTexture with EC2Runner[Object] with A
 
 }
 
-object IteratedTexture_Local extends IteratedTexture with LocalRunner[Object] with NotebookRunner[Object] {
+object PatternTexture_Local extends PatternTexture with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
 }
 
-class IteratedTexture extends ArtSetup[Object] {
+class PatternTexture extends ArtSetup[Object] {
 
   val styleList = Array(
     "allan-d-arcangelo",
@@ -76,9 +75,9 @@ class IteratedTexture extends ArtSetup[Object] {
   )
   val inputUrl = "plasma"
   val trainingMinutes: Int = 60
-  val trainingIterations: Int = 10
+  val trainingIterations: Int = 50
   val tiledViewPadding = 32
-  val maxRate = 1e7
+  val maxRate = 1e9
   val tileSize = 350
   val tilePadding = 32
   val styleMagnification = 1.0
@@ -86,28 +85,39 @@ class IteratedTexture extends ArtSetup[Object] {
   val styleMax = 1280
   val aspect = 1 // (11.0 - 0.5) / (8.5 - 0.5)
   val stylePixelMax = 5e6
-  val colorCoeff = 1e1
-  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(1280.0 / 128, 1.0 / 8)).toInt).takeWhile(_ <= 1280).toArray
+  val patternCoeff = 1e-5
+  val colorCoeff = 0
+  val styleMatchCoeff = 0
+  val resolutions: Array[Int] = Stream.iterate(64)(x => (x * Math.pow(1280.0 / 128, 1.0 / 8)).toInt).takeWhile(_ <= 512).toArray
 
   override def cudaLog = false
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
       ScalaJson.toJson(Map(
-        "this" -> IteratedTexture.this,
+        "this" -> PatternTexture.this,
         "style" -> styleLayers.map(_.name())
       ))
     })
-    CudaSettings.INSTANCE().defaultPrecision = precision
     for (styleName <- styleList) {
       log.h1(styleName)
-      val patternFiles = findFiles("pikachu", base = "file:///C:/Users/andre/Downloads/pics/")
+      val patternFiles = findFiles("pikachu", base = "file:///C:/Users/andre/Downloads/pics/").take(1)
       val styleFiles = findFiles(styleName)
       var canvas: Tensor = null
       withMonitoredJpg(() => Option(canvas).map(_.toRgbImage).orNull) {
         log.subreport("pikachu", (sub: NotebookOutput) => {
           for (res <- resolutions) {
+            CudaSettings.INSTANCE().defaultPrecision = precision(res)
             sub.h1("Resolution " + res)
+
+            def loadPatterns = loadImages(
+              baseImage = canvas,
+              fileUrls = patternFiles,
+              minWidth = 1,
+              maxWidth = Integer.MAX_VALUE,
+              magnification = 1.0,
+              maxPixels = 5e6
+            )(sub)
 
             def loadStyles = loadImages(
               baseImage = canvas,
@@ -120,21 +130,22 @@ class IteratedTexture extends ArtSetup[Object] {
 
             if (null == canvas) {
               sub.h2("Content")
-              canvas = load(Array(res, (res * aspect).toInt), inputUrl)(sub)
+              canvas = load(Array(res, (res * aspect).toInt, 3), inputUrl)(sub)
               sub.h2("Style")
               val styleImages = loadStyles
               canvas = Tensor.fromRGB(sub.eval(() => {
                 colorTransfer(canvas, styleImages, false)(sub).copy().freeze().eval(canvas).getDataAndFree.getAndFree(0).toRgbImage
               }))
               sub.h2("Result")
-              styleTransfer(precision, styleImages, canvas)(sub)
+              styleTransfer(precision(res), styleImages, loadPatterns, canvas)(sub)
             }
             else {
               canvas = Tensor.fromRGB(TestUtil.resize(canvas.toRgbImage, res, true))
               sub.h2("Result")
               styleTransfer(
-                precision = precision,
+                precision = precision(res),
                 styleImage = loadStyles,
+                patternImages = loadPatterns,
                 canvasImage = canvas
               )(sub)
             }
@@ -146,18 +157,18 @@ class IteratedTexture extends ArtSetup[Object] {
     null
   }
 
-  def precision = Precision.Float
+  def precision(w: Int) = if (w < 400) Precision.Double else Precision.Float
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
-    Inc5H_1a,
-    Inc5H_2a,
-    Inc5H_3a,
-    Inc5H_3b,
-    //        Inc5H_4a,
-    //        Inc5H_4b,
-    //        Inc5H_4c,
-    //Inc5H_4d,
-    //Inc5H_4e,
+    //    Inc5H_1a,
+    //    Inc5H_2a,
+    //    Inc5H_3a,
+    //    Inc5H_3b,
+    //    Inc5H_4a,
+    //    Inc5H_4b,
+    //    Inc5H_4c,
+    //    Inc5H_4d,
+    //    Inc5H_4e,
     //Inc5H_5a,
     //Inc5H_5b,
 
@@ -176,18 +187,19 @@ class IteratedTexture extends ArtSetup[Object] {
     //    VGG16_1e3
     //    VGG16_2
 
-    VGG19_0,
-    VGG19_1a,
-    VGG19_1b1,
-    VGG19_1b2,
-    VGG19_1c1,
-    VGG19_1c2,
-    VGG19_1c3,
-    VGG19_1c4,
-    VGG19_1d1,
-    VGG19_1d2,
-    VGG19_1d3
-    //        VGG19_1d4
+    VGG19_0
+    //    VGG19_1a,
+    //    VGG19_1a2,
+    //    VGG19_1b1,
+    //    VGG19_1b2
+    //    VGG19_1c1,
+    //    VGG19_1c2,
+    //    VGG19_1c3,
+    //    VGG19_1c4
+    //    VGG19_1d1,
+    //    VGG19_1d2,
+    //    VGG19_1d3,
+    //    VGG19_1d4,
     //    VGG19_1e1,
     //    VGG19_1e2,
     //    VGG19_1e3,
@@ -201,7 +213,7 @@ class IteratedTexture extends ArtSetup[Object] {
       val canvasDims = baseImage.getDimensions()
       val canvasPixels = canvasDims(0) * canvasDims(1)
       val stylePixels = styleImage.getWidth * styleImage.getHeight
-      var finalWidth = (styleImage.getWidth * Math.sqrt((canvasPixels.toDouble / stylePixels)) * magnification).toInt
+      var finalWidth = (styleImage.getWidth * Math.sqrt((canvasPixels.toDouble / stylePixels) * magnification)).toInt
       if (finalWidth < minWidth) finalWidth = minWidth
       if (finalWidth > Math.min(maxWidth, styleImage.getWidth)) finalWidth = Math.min(maxWidth, styleImage.getWidth)
       val resized = TestUtil.resize(styleImage, finalWidth, true)
@@ -215,17 +227,22 @@ class IteratedTexture extends ArtSetup[Object] {
     styles.toArray
   }
 
-  def styleTransfer(precision: Precision, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
-    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
+  def styleTransfer(precision: Precision, styleImage: Seq[Tensor], patternImages: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
+    val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).scale(styleMatchCoeff).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val colorOperator = new ChannelMeanMatcher().combine(new GramMatrixMatcher().setTileSize(tileSize).scale(1e-1)).scale(colorCoeff)
-
+    val patternOperator = new PatternPCAMatcher().scale(patternCoeff)
+    val canvasDims = canvasImage.getDimensions
+    val viewLayer = new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
+      .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
+    val borderedPatterns = patternImages.map(patternImage => viewLayer.eval(patternImage).getDataAndFree.getAndFree(0))
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
-      val styleNetwork = SumInputsLayer.combine(pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)): _*)
+      val styleNetwork = SumInputsLayer.combine((
+        patternImages.map(patternImage => colorOperator.build(patternImage)).toList ++
+          pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*))
+          ++ pipelineStyleLayers.flatMap(pipelineStyleLayer => borderedPatterns.map(patternImage => patternOperator.build(pipelineStyleLayer, patternImage)))
+        ): _*)
       //TestUtil.graph(log, styleNetwork)
-      val canvasDims = canvasImage.getDimensions
-      val viewLayer = new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
-        .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
       new TiledTrainable(canvasImage, viewLayer, tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           regionSelector.freeRef()
@@ -236,7 +253,7 @@ class IteratedTexture extends ArtSetup[Object] {
     withMonitoredJpg(canvasImage.toRgbImage) {
       withTrainingMonitor(trainingMonitor => {
         log.eval(() => {
-          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setMinAlpha(1e-4).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
+          val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setMinAlpha(1e-10).setAlpha(1).setRelativeTolerance(1e-5)
           IterativeTrainer.wrap(trainable)
             .setOrientation(new TrustRegionStrategy(new LBFGS) {
               override def getRegionPolicy(layer: Layer) = new CompoundRegion(
@@ -261,6 +278,6 @@ class IteratedTexture extends ArtSetup[Object] {
     canvasImage
   }
 
-  def styleEnhancement(width: Int): Double = if (width < 256) 1e1 else if (width < 512) 1e0 else 0
+  def styleEnhancement(width: Int): Double = 0 // if (width < 256) 1e1 else if (width < 512) 1e0 else 0
 
 }

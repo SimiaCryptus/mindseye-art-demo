@@ -23,10 +23,10 @@ import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.constraints.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.util.ArtSetup
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
+import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.{LinearActivationLayer, SumInputsLayer}
@@ -40,6 +40,8 @@ import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
+
+import scala.collection.mutable.ArrayBuffer
 
 object AnimatedStyleTransfer_EC2 extends AnimatedStyleTransfer with EC2Runner[Object] with AWSNotebookRunner[Object] {
 
@@ -67,13 +69,16 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
   val contentUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Mandrill_at_SF_Zoo.jpg/1280px-Mandrill_at_SF_Zoo.jpg"
   val inputUrl = contentUrl
   val styleUrl = "https://uploads1.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg!HD.jpg"
-  val contentResolution = 512
-  val styleResolution = 512
+  val contentResolution = 256
+  val styleResolution = 256
   val trainingMinutes: Int = 60
-  val trainingIterations: Int = 10
+  val trainingIterations: Int = 50
   val tileSize = 400
   val tilePadding = 8
-  val maxRate = 1e10
+  val maxRate = 1e5
+  val styleCoeffMin = 1e0
+  val styleCoeffMax = 1e5
+  val steps = 8
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
@@ -84,9 +89,7 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
     })
     implicit val _log = log
     CudaSettings.INSTANCE().defaultPrecision = precision
-    val contentImage = Tensor.fromRGB(log.eval(() => {
-      VisionPipelineUtil.load(contentUrl, contentResolution)
-    }))
+    val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(contentUrl, contentResolution))
     val contentOperator = new RMSContentMatcher().scale(1e-4)
     val styleOperator = new GramMatrixMatcher().setTileSize(300)
       .combine(new GramMatrixEnhancer().setTileSize(300))
@@ -101,8 +104,8 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
       styleNet.wrap(styleGate).freeRef()
       styleNet
     })
-    val canvas = load(contentImage, inputUrl)
-    val trainable = new SumTrainable(styleNetworks.values.map(styleNetwork=>{
+    val canvas = load(contentImage, inputUrl)(new NullNotebookOutput())
+    val trainable = new SumTrainable(styleNetworks.values.map(styleNetwork => {
       new TiledTrainable(canvas, 300, 32, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           val contentTile = regionSelector.eval(contentImage).getDataAndFree.getAndFree(0)
@@ -114,37 +117,35 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
         }
       }
     }).toList: _*)
-    val styleCoeffMin = 1e0
-    val styleCoeffMax = 2e0
-    val steps = 3
-    val frames = for (styleCoeff <- Stream.iterate(styleCoeffMin)(_ * Math.pow(styleCoeffMax/styleCoeffMin, 1.0 / steps)).takeWhile(_ <= styleCoeffMax)) yield {
-      log.h1(styleCoeff.toString)
-      canvas.set(load(contentImage, inputUrl)(new NullNotebookOutput()))
-      styleGate.setScale(styleCoeff).setBias(0)
-      withMonitoredJpg(() => canvas.toRgbImage) {
-        withTrainingMonitor(trainingMonitor => {
-          log.eval(() => {
-            val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
-            new IterativeTrainer(trainable)
-              .setOrientation(new TrustRegionStrategy(new LBFGS) {
-                override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
-              })
-              .setMonitor(trainingMonitor)
-              .setTimeout(trainingMinutes, TimeUnit.MINUTES)
-              .setMaxIterations(trainingIterations)
-              .setLineSearchFactory((_: CharSequence) => search)
-              .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
-              .runAndFree
-              .asInstanceOf[lang.Double]
+    val array = new ArrayBuffer[Tensor]
+    NotebookRunner.withMonitoredGif(() => (array.toArray ++ array.toArray.reverse).distinct.map(_.toRgbImage)) {
+      for (styleCoeff <- Stream.iterate(styleCoeffMin)(_ * Math.pow(styleCoeffMax / styleCoeffMin, 1.0 / steps)).takeWhile(_ <= styleCoeffMax)) {
+        log.h1(styleCoeff.toString)
+        canvas.set(load(contentImage, inputUrl)(new NullNotebookOutput()))
+        styleGate.setScale(styleCoeff).setBias(0)
+        withMonitoredJpg(() => canvas.toRgbImage) {
+          withTrainingMonitor(trainingMonitor => {
+            log.eval(() => {
+              val search = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setAlpha(maxRate / 10).setRelativeTolerance(1e-3)
+              new IterativeTrainer(trainable)
+                .setOrientation(new TrustRegionStrategy(new LBFGS) {
+                  override def getRegionPolicy(layer: Layer) = new RangeConstraint().setMin(0e-2).setMax(256)
+                })
+                .setMonitor(trainingMonitor)
+                .setTimeout(trainingMinutes, TimeUnit.MINUTES)
+                .setMaxIterations(trainingIterations)
+                .setLineSearchFactory((_: CharSequence) => search)
+                .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
+                .runAndFree
+                .asInstanceOf[lang.Double]
+            })
           })
-        })
-        null
+          null
+        }
+        array += canvas.copy()
       }
-      contentImage
     }
-    NotebookRunner.withMonitoredGif(() => frames.map(_.toRgbImage)) {
-      null
-    }
+    null
   }
 
   def precision = Precision.Double
@@ -167,8 +168,8 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
     //Inc5H_5a,
     //Inc5H_5b,
 
-    VGG16_0,
-    VGG16_1a,
+    //    VGG16_0,
+    //    VGG16_1a,
     VGG16_1b1,
     VGG16_1b2,
     VGG16_1c1,
@@ -183,7 +184,7 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
     //    VGG16_2
 
     //    VGG19_0,
-    //    VGG19_1a1,
+    //    VGG19_1a,
     //    VGG19_1a2,
     //    VGG19_1b1,
     //    VGG19_1b2,
