@@ -25,7 +25,7 @@ import java.util.stream.Collectors
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.ops.{GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.ops.{GramMatrixEnhancer, GramMatrixMatcher, ContentMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
@@ -238,7 +238,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
   }
 
   def styleTransfer(contentCoeff: Double, precision: Precision, contentImage: Tensor, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
-    val contentOperator = new RMSContentMatcher().scale(contentCoeff)
+    val contentOperator = new ContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val trainable = new SumTrainable(((styleLayers ++ contentLayers).groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))

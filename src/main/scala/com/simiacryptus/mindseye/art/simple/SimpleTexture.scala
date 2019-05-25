@@ -17,12 +17,13 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.simple
 
 import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
+import com.simiacryptus.mindseye.art.TiledTrainable
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
@@ -72,7 +73,6 @@ abstract class SimpleTexture extends RepeatedArtSetup[Object] {
   val trainingMinutes = 60
   val trainingIterations = 100
   val tileSize = 512
-
   val maxRate: Double = 1e6
 
   override def postConfigure(log: NotebookOutput) = {

@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, ContentMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
@@ -90,7 +90,7 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
     implicit val _log = log
     CudaSettings.INSTANCE().defaultPrecision = precision
     val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(contentUrl, contentResolution))
-    val contentOperator = new RMSContentMatcher().scale(1e-4)
+    val contentOperator = new ContentMatcher().scale(1e-4)
     val styleOperator = new GramMatrixMatcher().setTileSize(300)
       .combine(new GramMatrixEnhancer().setTileSize(300))
     val colorOperator = new GramMatrixMatcher().setTileSize(300).combine(new ChannelMeanMatcher).scale(1e1)

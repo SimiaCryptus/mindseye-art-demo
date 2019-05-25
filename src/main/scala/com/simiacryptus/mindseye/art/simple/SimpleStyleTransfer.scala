@@ -17,14 +17,15 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.simple
 
 import java.lang
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
+import com.simiacryptus.mindseye.art.TiledTrainable
 import com.simiacryptus.mindseye.art.models.VGG16._
-import com.simiacryptus.mindseye.art.ops.{GramMatrixMatcher, RMSContentMatcher}
+import com.simiacryptus.mindseye.art.ops.{GramMatrixMatcher, ContentMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
@@ -89,7 +90,7 @@ abstract class SimpleStyleTransfer extends ArtSetup[Object] {
     }))
     styleImage = colorTransfer(styleImage, List(contentImage), false)(log)
       .copy().freeze().eval(styleImage).getDataAndFree.getAndFree(0)
-    val contentOperator = new RMSContentMatcher().scale(contentCoeff)
+    val contentOperator = new ContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
       SumInputsLayer.combine(

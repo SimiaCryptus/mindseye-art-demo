@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.{Inception5H, VGG16, VGG19}
-import com.simiacryptus.mindseye.art.ops.RMSContentMatcher
+import com.simiacryptus.mindseye.art.ops.ContentMatcher
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
@@ -93,7 +93,7 @@ abstract class ContentLayerSurvey extends ArtSetup[Object] {
 
   def survey(layer: VisionPipelineLayer)(implicit log: NotebookOutput): Unit = {
     val contentImage = Tensor.fromRGB(VisionPipelineUtil.load(imageUrl, contentResolution))
-    val operator = new RMSContentMatcher
+    val operator = new ContentMatcher
     val canvas = contentImage.map((v: Double) => 200 * FastRandom.INSTANCE.random())
     val trainable = new TiledTrainable(canvas, tileSize, tilePadding, precision) {
       override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {

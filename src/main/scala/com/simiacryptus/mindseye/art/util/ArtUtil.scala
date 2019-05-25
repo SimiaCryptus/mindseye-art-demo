@@ -173,13 +173,16 @@ object ArtUtil {
     }
   }
 
-  def findFiles(key: String, base: String = "s3a://simiacryptus/photos/"): Array[String] = {
+  def findFiles(key: String, base: String): Array[String] = findFiles(Set(key), base)
+  def findFiles(key: String): Array[String] = findFiles(Set(key))
+
+  def findFiles(key: Set[String], base: String = "s3a://data-cb03c/crawl/wikiart/", minSize: Int = 32 * 1024): Array[String] = {
     val itr = FileSystem.get(new URI(base), VisionPipelineUtil.getHadoopConfig()).listFiles(new Path(base), true)
     val buffer = new ArrayBuffer[String]()
     while (itr.hasNext) {
       val status = itr.next()
-      val string = status.getPath.toString
-      if (string.contains(key)) buffer += string
+      lazy val string = status.getPath.toString
+      if (status.getLen > minSize && key.find(string.contains(_)).isDefined) buffer += string
     }
     buffer.toArray
   }
