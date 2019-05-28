@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.Inception5H._
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.art.ops.{GramMatrixMatcher, ContentMatcher}
+import com.simiacryptus.mindseye.art.ops.{ContentMatcher, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}

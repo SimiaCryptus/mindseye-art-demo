@@ -24,13 +24,10 @@ import com.simiacryptus.mindseye.test.TestUtil
 
 import scala.util.Random
 
-class ImageSource(urls:Seq[String]) {
+class ImageSource(urls: Seq[String]) {
   def tileSize: Int = 400
+
   def tilePadding: Int = 16
-  def minWidth: Int = 1
-  def maxWidth: Int = 2048
-  def maxPixels: Double = 5e6
-  def magnification: Double = 1.0
 
   def loadImages(canvasPixels: Int): Array[Tensor] = {
     val styles = Random.shuffle(urls.toList).map(styleUrl => {
@@ -45,5 +42,13 @@ class ImageSource(urls:Seq[String]) {
     while (styles.map(_.getDimensions).map(d => d(0) * d(1)).sum > maxPixels) styles.remove(0)
     styles.toArray
   }
+
+  def minWidth: Int = 1
+
+  def maxWidth: Int = 2048
+
+  def maxPixels: Double = 5e6
+
+  def magnification: Double = 1.0
 
 }

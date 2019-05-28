@@ -75,7 +75,7 @@ class Stereogram extends ArtSetup[Object] with BasicOptimizer {
       ))
     })
 
-    if(false) log.subreport("Fonts", (subreport: NotebookOutput) => Future {
+    if (false) log.subreport("Fonts", (subreport: NotebookOutput) => Future {
       GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.filter((x: String) => !(x == "EmojiOne Color")).foreach((fontname: String) => {
         subreport.p(fontname)
         subreport.p(subreport.png(TextUtil.draw(text, 800, 20, fontname, Font.PLAIN), fontname))

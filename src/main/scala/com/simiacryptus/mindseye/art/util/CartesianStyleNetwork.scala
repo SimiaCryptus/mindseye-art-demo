@@ -21,7 +21,7 @@ package com.simiacryptus.mindseye.art.util
 
 import com.simiacryptus.mindseye.art._
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, ContentMatcher}
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, ContentMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.eval.Trainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -52,7 +52,7 @@ object CartesianStyleNetwork {
     styleModifiers = List(
       new ChannelMeanMatcher(),
       new GramMatrixMatcher().setTileSize(400),
-      new GramMatrixEnhancer().setMinMax(-.25,.25).setTileSize(400)
+      new GramMatrixEnhancer().setMinMax(-.25, .25).setTileSize(400)
     ),
     styleUrl = ArtUtil.findFiles("claude-monet")
   )
@@ -173,9 +173,9 @@ case class CartesianStyleNetwork
   }
 
   def withContent(
-               contentLayers: Seq[VisionPipelineLayer],
-               contentModifiers: Seq[VisualModifier] = List(new ContentMatcher)
-             ) = CartesianStyleContentNetwork(
+                   contentLayers: Seq[VisionPipelineLayer],
+                   contentModifiers: Seq[VisualModifier] = List(new ContentMatcher)
+                 ) = CartesianStyleContentNetwork(
     styleLayers = styleLayers,
     styleModifiers = styleModifiers,
     styleUrl = styleUrl,

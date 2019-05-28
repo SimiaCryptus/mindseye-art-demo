@@ -35,11 +35,6 @@ import com.simiacryptus.sparkbook.util.Java8Util._
 
 trait BasicOptimizer {
 
-  def trainingMinutes: Int = 60
-  def trainingIterations: Int = 20
-  def maxRate = 1e9
-  def lineSearchFactory: LineSearchStrategy = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setMinAlpha(1e-10).setAlpha(1).setRelativeTolerance(1e-5)
-
   def optimize(canvasImage: Tensor, trainable: Trainable)(implicit log: NotebookOutput) = {
     withMonitoredJpg(canvasImage.toRgbImage) {
       withTrainingMonitor(trainingMonitor => {
@@ -58,6 +53,14 @@ trait BasicOptimizer {
       })
     }
   }
+
+  def trainingMinutes: Int = 60
+
+  def trainingIterations: Int = 20
+
+  def lineSearchFactory: LineSearchStrategy = new ArmijoWolfeSearch().setMaxAlpha(maxRate).setMinAlpha(1e-10).setAlpha(1).setRelativeTolerance(1e-5)
+
+  def maxRate = 1e9
 
   def orientation() = {
     new TrustRegionStrategy(new LBFGS) {

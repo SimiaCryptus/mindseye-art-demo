@@ -68,12 +68,6 @@ class TextureStyleDemo extends ArtSetup[Object] with BasicOptimizer {
 
   override def cudaLog = false
 
-  def resolutions = Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt).toArray
-
-  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
-
-  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
-
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
       ScalaJson.toJson(Map(
@@ -85,11 +79,11 @@ class TextureStyleDemo extends ArtSetup[Object] with BasicOptimizer {
       log.h1(name)
       for (layers <- List(
         List(
-//          VGG19_1d1,
-//          VGG19_1d2,
-//          VGG19_1d3,
-//          VGG19_1d4
-//        ), List(
+          //          VGG19_1d1,
+          //          VGG19_1d2,
+          //          VGG19_1d3,
+          //          VGG19_1d4
+          //        ), List(
           VGG19_1b2,
           VGG19_1c4,
           VGG19_1d4,
@@ -304,6 +298,12 @@ class TextureStyleDemo extends ArtSetup[Object] with BasicOptimizer {
       optimize(canvas.get, network.copy(precision = precision, viewLayer = viewLayer).apply(canvas.get))
     }
   }
+
+  def resolutions = Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt).toArray
+
+  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
+
+  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
 
 }
 

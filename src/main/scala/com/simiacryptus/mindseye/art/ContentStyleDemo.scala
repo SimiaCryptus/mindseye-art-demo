@@ -23,10 +23,10 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.models.PoolingPipeline._
 import com.simiacryptus.mindseye.art.models.VGG19
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, ContentMatcher}
+import com.simiacryptus.mindseye.art.models.VGG19._
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, ContentMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util._
 import com.simiacryptus.mindseye.lang.Tensor
@@ -63,7 +63,7 @@ class ContentStyleDemo extends ArtSetup[Object] with BasicOptimizer with Geometr
   override val trainingMinutes: Int = 90
   override val trainingIterations: Int = 50
   override val maxRate = 1e9
-//  val contentUrl = "file:///C:/Users/andre/Downloads/IMG_20190422_150855449.jpg"
+  //  val contentUrl = "file:///C:/Users/andre/Downloads/IMG_20190422_150855449.jpg"
   val contentUrl = "file:///E:/Media/Pictures/moms_photoframe/moms_photoframe-0043.jpg"
   val styleUrls = Array(
     "https://uploads4.wikiart.org/00142/images/vincent-van-gogh/the-starry-night.jpg"
@@ -71,8 +71,6 @@ class ContentStyleDemo extends ArtSetup[Object] with BasicOptimizer with Geometr
   val initUrl = "noise100"
 
   override def cudaLog = false
-
-  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
@@ -118,7 +116,7 @@ class ContentStyleDemo extends ArtSetup[Object] with BasicOptimizer with Geometr
         null
       })
       null
-    } (log)
+    }(log)
 
     null
   }
@@ -139,6 +137,8 @@ class ContentStyleDemo extends ArtSetup[Object] with BasicOptimizer with Geometr
       optimize(canvas.get, network.copy(precision = precision).apply(canvas.get, Tensor.fromRGB(content)))
     }
   }
+
+  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
 
 }
 

@@ -68,34 +68,25 @@ object BooleanIterator_EC2 extends BooleanIterator with EC2Runner[Object] with A
 
   override def nodeSettings = EC2NodeSettings.P2_XL
 
-  override def spark_master = "local[1]"
-
   override def javaProperties: Map[String, String] = Map(
     "spark.master" -> spark_master
   )
 
+  override def spark_master = "local[1]"
+
 }
 
 object BooleanIterator_Local extends BooleanIterator with LocalRunner[Object] with NotebookRunner[Object] {
+  override val urlBase: String = "http://localhost:1080/etc/"
+
   override def inputTimeoutSeconds = 30
 
   override def spark_master = "local[1]"
-
-  override val urlBase: String = "http://localhost:1080/etc/"
 
 }
 
 
 abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
-
-  @JsonIgnore def spark_master: String
-
-  @JsonIgnore def sparkFactory: SparkSession = {
-    val builder = SparkSession.builder()
-    import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
-    builder.master("local[8]").getOrCreate()
-  }
 
   val archiveUrl = "file:///C:/Users/andre/data/images/"
   val toDisplay = 1000
@@ -107,15 +98,17 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
   val initialSamples = 20
   val incrementalSamples = 20
   val sampleEpochs = 0
-
-  def urlBase: String
-
-  override def cudaLog = false
   val hiddenLayer1 = 128
   val dropoutSamples = 5
   val dropoutFactor = Math.pow(0.5, 0.5)
   val classificationPaintingBias = 0.5
   val signalMatchBias = 0.1
+
+  @JsonIgnore def spark_master: String
+
+  def urlBase: String
+
+  override def cudaLog = false
 
   override def postConfigure(log: NotebookOutput) = {
     implicit val sparkSession = sparkFactory
@@ -135,10 +128,14 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         index("resolution").eqNullSafe(lit(indexResolution))
       ))
     }
-    val positiveExamples = findRows(positiveSeeds.map(_.trim).filter(!_.isEmpty):_*).collect().toBuffer
-    val negativeExamples = findRows(negativeSeeds.map(_.trim).filter(!_.isEmpty):_*).collect().toBuffer
+
+    val positiveExamples = findRows(positiveSeeds.map(_.trim).filter(!_.isEmpty): _*).collect().toBuffer
+    val negativeExamples = findRows(negativeSeeds.map(_.trim).filter(!_.isEmpty): _*).collect().toBuffer
+
     def avoid = positiveExamples.union(negativeExamples).map(_.getAs[String]("file")).distinct.toArray
-    index.groupBy("layer", "resolution").agg(count(index("file")).as("count")).foreach(row=>println(row.toString))
+
+    index.groupBy("layer", "resolution").agg(count(index("file")).as("count")).foreach(row => println(row.toString))
+
     def filterIndex = index.where(
       index("layer").eqNullSafe(lit(visionLayer.name())).and(
         !index("file").isin(avoid: _*)
@@ -146,36 +143,38 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         index("resolution").eqNullSafe(lit(indexResolution))
       )
     )
+
     require(!filterIndex.isEmpty)
     val pngCache = new mutable.HashMap[String, File]()
-    val (meanSignalPreview: Tensor,covarianceSignalPreview: Tensor) = stats(filterIndex.limit(100))
+    val (meanSignalPreview: Tensor, covarianceSignalPreview: Tensor) = stats(filterIndex.limit(100))
     val innerClassifier = PipelineNetwork.wrap(1,
-      new LinearActivationLayer().setScale(1e-2*Math.pow(meanSignalPreview.rms(),-1)).freeze(),
+      new LinearActivationLayer().setScale(1e-2 * Math.pow(meanSignalPreview.rms(), -1)).freeze(),
       new FullyConnectedLayer(Array(1, 1, dim), Array(hiddenLayer1)),
       new BiasLayer(hiddenLayer1),
-//      new ReLuActivationLayer(),
+      //      new ReLuActivationLayer(),
       new SigmoidActivationLayer(),
       new DropoutNoiseLayer(dropoutFactor),
       new FullyConnectedLayer(Array(hiddenLayer1), Array(2)),
       new BiasLayer(2),
       new SoftmaxLayer()
     )
-    var classifier : Layer = innerClassifier
-    classifier = new StochasticSamplingSubnetLayer(classifier,dropoutSamples)
+    var classifier: Layer = innerClassifier
+    classifier = new StochasticSamplingSubnetLayer(classifier, dropoutSamples)
     val selfEntropyNet = new PipelineNetwork(1)
     selfEntropyNet.wrap(classifier)
     selfEntropyNet.wrap(new EntropyLossLayer(), selfEntropyNet.getHead, selfEntropyNet.getHead)
 
-    def bestSamples(sample:Int) = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(filterIndex.rdd.sortBy(r => {
+    def bestSamples(sample: Int) = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(filterIndex.rdd.sortBy(r => {
       val array = r.getAs[Seq[Double]]("data").toArray
-      val tensor = new Tensor(array, 1,1,array.length)
+      val tensor = new Tensor(array, 1, 1, array.length)
       val result = selfEntropyNet.eval(tensor).getDataAndFree.getAndFree(0)
       val v = result.get(0)
       tensor.freeRef()
       result.freeRef()
       -v
     }).take(sample)), index.schema)
-    def newConfirmationBatch(index: DataFrame, sample: Int,log:NotebookOutput) = {
+
+    def newConfirmationBatch(index: DataFrame, sample: Int, log: NotebookOutput) = {
       val seed = index.rdd.map(_.getAs[String]("file")).distinct().take(sample).map(_ -> true).toMap
       val ids = seed.mapValues(_ => UUID.randomUUID().toString).toArray.toMap
       Await.result(Future.sequence(for ((k, v) <- seed) yield Future {
@@ -183,7 +182,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
           val filename = k.split('/').last.toLowerCase.stripSuffix(".png") + ".png"
           pngCache.getOrElseUpdate(k, log.pngFile(VisionPipelineUtil.load(k, 256), new File(log.getResourceDir, filename)))
         } catch {
-          case e : Throwable => e.printStackTrace()
+          case e: Throwable => e.printStackTrace()
         }
       }), 10 minutes)
       new FormQuery[Map[String, Boolean]](log.asInstanceOf[MarkdownNotebookOutput]) {
@@ -208,21 +207,21 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
       }.setValue(seed).print().get(6000, TimeUnit.SECONDS)
     }
 
-    def trainEpoch(log:NotebookOutput) = {
+    def trainEpoch(log: NotebookOutput) = {
       withTrainingMonitor(monitor => {
         classifier.asInstanceOf[StochasticSamplingSubnetLayer].clearNoise
         log.eval(() => {
           val search = new ArmijoWolfeSearch
           IterativeTrainer.wrap(new ArrayTrainable((positiveExamples.map(x => Array(
-            new Tensor(x.getAs[Seq[Double]]("data").toArray, 1,1,dim),
-            new Tensor(Array(1.0, 0.0), 1,1,2)
+            new Tensor(x.getAs[Seq[Double]]("data").toArray, 1, 1, dim),
+            new Tensor(Array(1.0, 0.0), 1, 1, 2)
           )).toList ++ negativeExamples.map(x => Array(
-            new Tensor(x.getAs[Seq[Double]]("data").toArray, 1,1,dim),
-            new Tensor(Array(0.0, 1.0), 1,1,2)
+            new Tensor(x.getAs[Seq[Double]]("data").toArray, 1, 1, dim),
+            new Tensor(Array(0.0, 1.0), 1, 1, 2)
           )).toList).toArray, new SimpleLossNetwork(classifier, new EntropyLossLayer())))
             .setMaxIterations(100)
             .setIterationsPerSample(5)
-            .setLineSearchFactory((n:CharSequence)=>search)
+            .setLineSearchFactory((n: CharSequence) => search)
             .setOrientation(new OwlQn())
             .setMonitor(monitor)
             .runAndFree().toString
@@ -232,25 +231,25 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
       })(log)
     }
 
-    if(positiveExamples.isEmpty || negativeExamples.isEmpty) {
+    if (positiveExamples.isEmpty || negativeExamples.isEmpty) {
       // Build Tag Model
-      val (newPositives, newNegatives) = newConfirmationBatch(index = filterIndex, sample = initialSamples, log=log).partition(_._2)
+      val (newPositives, newNegatives) = newConfirmationBatch(index = filterIndex, sample = initialSamples, log = log).partition(_._2)
       positiveExamples ++= newPositives.keys.map(findRows(_).head()).toList
       negativeExamples ++= newNegatives.keys.map(findRows(_).head()).toList
     }
-    trainEpoch(log=log)
+    trainEpoch(log = log)
 
     for (i <- 0 until sampleEpochs) {
-      val (newPositives, newNegatives) = newConfirmationBatch(index = bestSamples(incrementalSamples), sample = incrementalSamples, log=log).partition(_._2)
+      val (newPositives, newNegatives) = newConfirmationBatch(index = bestSamples(incrementalSamples), sample = incrementalSamples, log = log).partition(_._2)
       positiveExamples ++= newPositives.keys.map(findRows(_).head()).toList
       negativeExamples ++= newNegatives.keys.map(findRows(_).head()).toList
-      trainEpoch(log=log)
+      trainEpoch(log = log)
     }
 
     // Write projector
     val dataframe = sparkSession.createDataFrame(filterIndex.rdd.map(r => {
       val array = r.getAs[Seq[Double]]("data").toArray
-      val tensor = new Tensor(array, 1,1, array.length)
+      val tensor = new Tensor(array, 1, 1, array.length)
       val result = classifier.eval(tensor).getDataAndFree.getAndFree(0)
       val v = result.get(0)
       tensor.freeRef()
@@ -261,7 +260,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
       .sortBy(-_._2)
       .map(_._1), index.schema).limit(toDisplay)
 
-    log.subreport("Projector",(sub:NotebookOutput)=>{
+    log.subreport("Projector", (sub: NotebookOutput) => {
       val fileKeys = dataframe.select("file").rdd.map(_.getString(0)).distinct().collect()
       val pngFile: String = getThumbnailImage(fileKeys, thumbnailResolution)(sub)
       val embeddingConfigs = for (Row(pipeline: String, resolution: Int, layer: String) <- dataframe.select("pipeline", "resolution", "layer").distinct().collect()) yield {
@@ -270,7 +269,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         val embeddings = dataframe.where((dataframe("pipeline") eqNullSafe pipeline) and (dataframe("resolution") eqNullSafe resolution) and (dataframe("layer") eqNullSafe layer))
           .select("file", "data").limit(toDisplay).collect()
           .map({ case Row(file: String, data: Seq[Double]) => file -> data.toArray }).toMap
-          .mapValues(data => new Tensor(data, 1,1, data.length))
+          .mapValues(data => new Tensor(data, 1, 1, data.length))
 
         val config = getProjectorConfig(label, embeddings, urlBase, thumbnailResolution, fileKeys, pngFile)(sub)
         logEmbedding(urlBase, config)(sub)
@@ -283,6 +282,14 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
     paint(dataframe, precision, visionLayer, innerClassifier, log, "Painting_Boolean")
     null
   }
+
+  @JsonIgnore def sparkFactory: SparkSession = {
+    val builder = SparkSession.builder()
+    import scala.collection.JavaConverters._
+    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    builder.master("local[8]").getOrCreate()
+  }
+
   def paint(dataframe: Dataset[Row], p: Precision, visionLayer: VisionPipelineLayer, innerClassifier: Layer, log: NotebookOutput, title: String) = {
     var precision = p
     val (meanSignal: Tensor, covarianceSignal: Tensor) = stats(dataframe)
@@ -377,7 +384,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
     val dataIn = new Tensor(pixels.reduce(_ ++ _), 1, pixelCnt, dim)
     val covarianceSignal = new GramianLayer().eval(dataIn).getDataAndFree.getAndFree(0)
     dataIn.freeRef()
-    (meanSignal,covarianceSignal)
+    (meanSignal, covarianceSignal)
   }
 
   def select(index: DataFrame, exampleRow: Row, window: Int)(implicit sparkSession: SparkSession): DataFrame = {

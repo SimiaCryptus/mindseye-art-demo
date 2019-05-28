@@ -19,9 +19,7 @@
 
 package com.simiacryptus.mindseye.art.index
 
-import java.awt.Desktop
-import java.net.{InetAddress, URI}
-import java.util.UUID
+import java.net.InetAddress
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.simiacryptus.aws.exe.EC2NodeSettings
@@ -32,11 +30,10 @@ import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, VisionPipel
 import com.simiacryptus.mindseye.art.{VisionPipeline, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.layers.cudnn.BandAvgReducerLayer
-import com.simiacryptus.mindseye.layers.java.ImgTileAssemblyLayer
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.{AWSNotebookRunner, EC2Runner, NotebookRunner}
 import com.simiacryptus.sparkbook.util.Java8Util._
-import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
+import com.simiacryptus.sparkbook.util.LocalRunner
+import com.simiacryptus.sparkbook.{AWSNotebookRunner, EC2Runner, NotebookRunner}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
@@ -55,33 +52,25 @@ object VisionIndexer_EC2 extends VisionIndexer with EC2Runner[Object] with AWSNo
 
   override def nodeSettings = EC2NodeSettings.P2_XL
 
-  override def spark_master = "local[1]"
-
   override def javaProperties: Map[String, String] = Map(
     "spark.master" -> spark_master
   )
 
+  override def spark_master = "local[1]"
+
 }
+
 object VisionIndexer_Local extends VisionIndexer with LocalRunner[Object] with NotebookRunner[Object] {
+  override val urlBase: String = "http://localhost:1080/etc/"
+
   override def inputTimeoutSeconds = 5
 
   override def spark_master = "local[1]"
-
-  override val urlBase: String = "http://localhost:1080/etc/"
 
 }
 
 
 abstract class VisionIndexer extends ArtSetup[Object] with BasicOptimizer {
-
-  @JsonIgnore def spark_master: String
-
-  @JsonIgnore def sparkFactory: SparkSession = {
-    val builder = SparkSession.builder()
-    import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
-    builder.master("local[1]").getOrCreate()
-  }
 
   val archiveUrl = "file:///C:/Users/andre/data/images/"
   val inputUrl = "s3a://data-cb03c/crawl/wikiart/"
@@ -89,6 +78,8 @@ abstract class VisionIndexer extends ArtSetup[Object] with BasicOptimizer {
   val toDisplay = 1000
   val indexResolution = 512
   val thumbnailResolution = 128
+
+  @JsonIgnore def spark_master: String
 
   def urlBase: String
 
@@ -102,11 +93,19 @@ abstract class VisionIndexer extends ArtSetup[Object] with BasicOptimizer {
     val index = indexAll(files, indexImages(VGG19.getVisionPipeline, toIndex, indexResolution, archiveUrl))
     null
   }
-  def indexAll(files: Array[String], indexer: Seq[String] => DataFrame)(implicit sparkSession: SparkSession):DataFrame = {
+
+  @JsonIgnore def sparkFactory: SparkSession = {
+    val builder = SparkSession.builder()
+    import scala.collection.JavaConverters._
+    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    builder.master("local[1]").getOrCreate()
+  }
+
+  def indexAll(files: Array[String], indexer: Seq[String] => DataFrame)(implicit sparkSession: SparkSession): DataFrame = {
     var dataframe: DataFrame = null
     while (dataframe == null || !dataframe.isEmpty) {
       dataframe = indexer(files)
-      if(!dataframe.isEmpty) dataframe.coalesce(files.size / 100).write.mode(SaveMode.Append).parquet(archiveUrl)
+      if (!dataframe.isEmpty) dataframe.coalesce(files.size / 100).write.mode(SaveMode.Append).parquet(archiveUrl)
     }
     val frame = sparkSession.read.parquet(archiveUrl).cache()
     println("Index contains " + frame.select("file").distinct().count() + " files")
@@ -117,7 +116,7 @@ abstract class VisionIndexer extends ArtSetup[Object] with BasicOptimizer {
 
 object VisionIndexer {
 
-  def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl:String)
+  def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl: String)
                  (files: String*)
                  (implicit sparkSession: SparkSession): DataFrame = {
     val indexed = Try {
@@ -127,7 +126,7 @@ object VisionIndexer {
     }.getOrElse(Set.empty)
     println("Current files in index: " + indexed.size)
     val allFiles = Random.shuffle(files.filter(!indexed.contains(_)).toList).distinct.take(toIndex)
-    if(allFiles.isEmpty) sparkSession.emptyDataFrame
+    if (allFiles.isEmpty) sparkSession.emptyDataFrame
     else index(visionPipeline, indexResolution, allFiles: _*)
   }
 

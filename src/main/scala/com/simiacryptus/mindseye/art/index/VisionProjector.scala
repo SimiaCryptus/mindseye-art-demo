@@ -26,7 +26,6 @@ import java.util.UUID
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.index.VisionProjector._
-import com.simiacryptus.mindseye.art.models.VGG19
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, VisionPipelineUtil}
 import com.simiacryptus.mindseye.art.{VisionPipeline, VisionPipelineLayer}
@@ -34,12 +33,12 @@ import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.layers.cudnn.BandAvgReducerLayer
 import com.simiacryptus.mindseye.layers.java.ImgTileAssemblyLayer
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.{AWSNotebookRunner, EC2Runner, NotebookRunner}
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
+import com.simiacryptus.sparkbook.{AWSNotebookRunner, EC2Runner, NotebookRunner}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 import scala.collection.JavaConversions._
 import scala.util.{Random, Try}
@@ -55,32 +54,24 @@ object VisionProjector_EC2 extends VisionProjector with EC2Runner[Object] with A
 
   override def nodeSettings = EC2NodeSettings.P2_XL
 
-  override def spark_master = "local[1]"
-
   override def javaProperties: Map[String, String] = Map(
     "spark.master" -> spark_master
   )
 
+  override def spark_master = "local[1]"
+
 }
+
 object VisionProjector_Local extends VisionProjector with LocalRunner[Object] with NotebookRunner[Object] {
+  override val urlBase: String = "http://localhost:1080/etc/"
+
   override def inputTimeoutSeconds = 5
 
   override def spark_master = "local[1]"
 
-  override val urlBase: String = "http://localhost:1080/etc/"
-
 }
 
 abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
-
-  @JsonIgnore def spark_master: String
-
-  @JsonIgnore def sparkFactory: SparkSession = {
-    val builder = SparkSession.builder()
-    import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
-    builder.master("local[1]").getOrCreate()
-  }
 
   val archiveUrl = "file:///C:/Users/andre/data/images/"
   val inputUrl = "s3a://data-cb03c/crawl/wikiart/"
@@ -94,6 +85,8 @@ abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
     "prince-muhammad-beik-of-georgia-1620.jpg!Large.jpg" -> "VGG19_1d4"
   )
 
+  @JsonIgnore def spark_master: String
+
   def urlBase: String
 
   override def cudaLog = false
@@ -104,8 +97,8 @@ abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
       "Large"
     ), base = inputUrl).filter(!_.contains("Small"))
     val index = sparkSession.read.parquet(archiveUrl).cache()
-    for((example, matcher) <- queries) {
-      log.subreport(example.split('.').head, (sub:NotebookOutput)=>{
+    for ((example, matcher) <- queries) {
+      log.subreport(example.split('.').head, (sub: NotebookOutput) => {
         val keyRow = index.where(index("file").contains(lit(example)).and(
           index("layer").eqNullSafe(lit(matcher))
         )).head()
@@ -130,21 +123,29 @@ abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
     }
     null
   }
-  def select(index: DataFrame, exampleRow: Row, window:Int)(implicit sparkSession: SparkSession):DataFrame = {
+
+  @JsonIgnore def sparkFactory: SparkSession = {
+    val builder = SparkSession.builder()
+    import scala.collection.JavaConverters._
+    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    builder.master("local[1]").getOrCreate()
+  }
+
+  def select(index: DataFrame, exampleRow: Row, window: Int)(implicit sparkSession: SparkSession): DataFrame = {
     val files = index.where(index("resolution").eqNullSafe(exampleRow.getAs[Int]("resolution")).and(
       index("pipeline").eqNullSafe(exampleRow.getAs[String]("pipeline"))
     ).and(
       index("layer").eqNullSafe(exampleRow.getAs[String]("layer"))
     )).rdd.sortBy(r => r.getAs[Seq[Double]]("data").zip(exampleRow.getAs[Seq[Double]]("data"))
       .map(t => t._1 - t._2).map(x => x * x).sum).map(_.getAs[String]("file")).distinct.take(window).toSet
-    index.filter(r=>files.contains(r.getAs[String]("file")))
+    index.filter(r => files.contains(r.getAs[String]("file")))
   }
 
 }
 
 object VisionProjector {
 
-  def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl:String)
+  def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl: String)
                  (files: String*)
                  (implicit sparkSession: SparkSession): DataFrame = {
     val indexed = Try {
@@ -154,7 +155,7 @@ object VisionProjector {
     }.getOrElse(Set.empty)
     println("Current files in index: " + indexed.size)
     val allFiles = Random.shuffle(files.filter(!indexed.contains(_)).toList).distinct.take(toIndex)
-    if(allFiles.isEmpty) sparkSession.emptyDataFrame
+    if (allFiles.isEmpty) sparkSession.emptyDataFrame
     else index(visionPipeline, indexResolution, allFiles: _*)
   }
 
@@ -195,7 +196,7 @@ object VisionProjector {
   }
 
   def getProjectorConfig(name: String, embeddings: Map[String, Tensor], urlBase: String, spriteSize: Int, images: Array[String], pngFile: String)
-                                (implicit log: NotebookOutput)= {
+                        (implicit log: NotebookOutput) = {
     val id = UUID.randomUUID().toString
     log.p(log.file(images.map(embeddings).map(_.getData.map("%.4f".format(_)).mkString("\t")).mkString("\n"), s"$id.tensors.tsv", "Data"))
     log.p(log.file((

@@ -69,15 +69,15 @@ object NanoCrawl_Local extends LocalRunner[Object] with NanoCrawl {
 }
 
 trait NanoCrawl extends InteractiveSetup[Object] with NotebookRunner[Object] with Logging {
-  def base: String
-
-  def storage: String
-
+  private lazy val allowedHosts = List(new URI(base).getHost.split("\\.").takeRight(2).mkString(".")).toArray
   val allowedExtensions = Array(
     "htm", "html", "",
     "jpg", "jpeg", "gif", "png",
     "txt")
-  private lazy val allowedHosts = List(new URI(base).getHost.split("\\.").takeRight(2).mkString(".")).toArray
+
+  def base: String
+
+  def storage: String
 
   @JsonIgnore def sparkFactory: SparkSession
 
@@ -131,6 +131,11 @@ trait NanoCrawl extends InteractiveSetup[Object] with NotebookRunner[Object] wit
     childLinks
   }
 
+  def filter(link: URI): Boolean = {
+    val hostAllowed = link.getHost == null || allowedHosts.filter(s => link.getHost.endsWith(s)).headOption.isDefined
+    val extension = Option(link.getPath).map(_.split("\\.").drop(1).lastOption.getOrElse("")).getOrElse("")
+    hostAllowed && allowedExtensions.contains(extension.toLowerCase) && (link.getHost != new URI(base).getHost || (null != link.getPath && link.getPath.startsWith(new URI(base).getPath)))
+  }
 
   def save(url: URI, data: Array[Byte]) = {
     if (url.getPath.split('.').last.toLowerCase match {
@@ -157,12 +162,6 @@ trait NanoCrawl extends InteractiveSetup[Object] with NotebookRunner[Object] wit
     val mimeType = responseEntity.getContentType.getValue.split(";")
     response.close()
     (textSrc, mimeType)
-  }
-
-  def filter(link: URI): Boolean = {
-    val hostAllowed = link.getHost == null || allowedHosts.filter(s => link.getHost.endsWith(s)).headOption.isDefined
-    val extension = Option(link.getPath).map(_.split("\\.").drop(1).lastOption.getOrElse("")).getOrElse("")
-    hostAllowed && allowedExtensions.contains(extension.toLowerCase) && (link.getHost != new URI(base).getHost || (null != link.getPath && link.getPath.startsWith(new URI(base).getPath)))
   }
 
 }

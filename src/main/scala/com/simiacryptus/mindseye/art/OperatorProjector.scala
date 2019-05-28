@@ -129,7 +129,7 @@ class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
 
           val embeddings: Map[String, Array[Double]] = (
             for (canvasFile <- images) yield {
-              canvasFile -> (for ((styleFile,trainable) <- styleVector.zip(trainables).toArray) yield {
+              canvasFile -> (for ((styleFile, trainable) <- styleVector.zip(trainables).toArray) yield {
                 val canvas = Tensor.fromRGB(VisionPipelineUtil.load(canvasFile, imageSize, imageSize))
                 globalCanvas.set(canvas)
                 val result = trainable.measure(new TrainingMonitor).sum

@@ -58,7 +58,6 @@ object TextureOperatorSurvey_Local extends TextureOperatorSurvey with LocalRunne
 
 class TextureOperatorSurvey extends ArtSetup[Object] with BasicOptimizer {
 
-  override def trainingIterations: Int = 25
   val inputUrl = "noise150"
   val tiledViewPadding = 0
   val tileSize = 512
@@ -67,19 +66,14 @@ class TextureOperatorSurvey extends ArtSetup[Object] with BasicOptimizer {
   val minResolution: Double = 256
   val maxResolution: Double = minResolution
   val resolutionSteps: Int = 1
-
   val styleMagnification = 1.0
   val styleMin = 64
   val styleMax = 1280
   val stylePixelMax = 1e7
 
+  override def trainingIterations: Int = 25
+
   override def cudaLog = false
-
-  def resolutions = (if(growth>1) Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution) else List(minResolution,maxResolution).distinct).map(_.toInt).toArray
-
-  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
-
-  def precision(w: Int) = if (w <= minResolution) Precision.Double else Precision.Float
 
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
@@ -98,11 +92,11 @@ class TextureOperatorSurvey extends ArtSetup[Object] with BasicOptimizer {
         "s3a://data-cb03c/crawl/wikiart/images/abdullah-suriosubroto/indonesian-landscape-7.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/alfred-sisley/the-dam-loing-canal-at-saint-mammes-1884.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/antonio-jacobsen/yacht-race-1895.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/arkhip-kuindzhi/sunset-in-the-steppes-by-the-sea.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/carl-spitzweg/mountain-hike-trip-to-duke-stand.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-atamian/children-by-the-sea.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-francois-daubigny/by-the-sea.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-m-russell/mexico-1925.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-m-russell/the-free-trader-1925.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-martin-powell/sailboats-and-fishing-boats-on-a-choppy-lake.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/charles-willson-peale/landscape-looking-towards-sellers-hall-from-mill-bank-1818.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/claude-monet/antibes-in-the-morning(1).jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/claude-monet/houses-of-parliament.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/claude-monet/not_detected_212150.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/constantin-flondor/sky-august-1986.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/david-davies/ercildoune-near-ballarat-1888.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/david-roberts/the-golden-tower-1833.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/elmer-bischoff/figure-in-landscape-1957.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/esaias-van-de-velde/militia-in-the-dunes-in-ambush.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/francesco-guardi/outward-voyage-of-the-bucintoro-to-san-nicol-del-lido-1788.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/fyodor-alekseyev/view-of-the-palace-embankment-from-st-peter-s-and-st-paul-s-fortress-1810.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/fyodor-bronnikov/cursed-field-the-place-of-execution-in-ancient-rome-crucified-slave-1878.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/fyodor-vasilyev/morning-1873-1.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/fyodor-vasilyev/pine-grove-in-the-swamp-1873.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/george-harvey/landscape-1874.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/george-lambert/bombay-1731.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/george-lambert/chiswick-house-middlesex-1742.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/george-lambert/landscape-with-figures-1757.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/gil-teixeira-lopes/espa-o-dourado.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/gustave-loiseau/banks-of-the-seine-in-summer-tournedos-sur-seine-1899.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/guy-rose/plums-waterglass-and-peaches-1889.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/henri-rousseau/seine-and-eiffel-tower-in-the-sunset-1910.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/isaac-levitan/quiet-cloister-1890-3.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/ivan-aivazovsky/exploding-ship-1900.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/ivan-aivazovsky/shipwreck-1854.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/ivan-shishkin/forest-glade-glade-1897.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/jacob-isaakszoon-van-ruisdael/stormy-sea-with-sailing-vessels-1668.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/janos-tornyai/winter-landscape-with-violet-lights.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/john-glover/landscape-view-in-cumberland-1820.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/john-varley/a-view-of-the-thames-looking-towards-battersea.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/jules-breton/the-shepherd-1905.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/jules-dupre/forest-landscape-1840.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/jules-dupre/landscape-with-cattle-at-limousin-1837.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/konstantin-bogaevsky/evening-at-the-sea-1941.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/lembesis-polychronis/supreme-court-1880.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/lilla-cabot-perry/little-girl-n-a-lane-giverny-1907.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/marcus-larson/stemship-in-sunset.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/marianne-north/life-on-the-coast-of-praslin-seychelles-1883.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/maxim-vorobiev/italian-landscape-1847.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/maxime-maufra/morning-in-the-oasis-of-alkantra-1913.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/norman-ackroyd/study-of-sunlight.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/nutzi-acontz/landscape-with-river-1954.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/p-ricl-s-pantazis/supreme-court-1880.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/paul-bril/landscape-with-nymphs-and-satyrs-1623.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/pavel-svinyin/the-tomb-of-george-washington.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/pierre-puvis-de-chavannes/young-girls-by-the-sea.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/pieter-wenning/transvaal-evening-nelspruit.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/rosa-bonheur/sheep-in-a-landscape.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/sydney-laurence/mount-mckinley.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/sydney-laurence/the-trapper-1914.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/theodor-philipsen/long-shadows-cattle-on-the-island-of-saltholm-1890.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/theodor-severin-kittelsen/gutt-paa-hvit-hest.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/vasily-polenov/has-been-in-desert-1909.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/vasily-polenov/the-river-oka-1918.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/veniamin-kremer/cloudy-1975.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/volodymyr-orlovsky/at-the-field-1890.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/william-hart/harvest-scene-valley-of-the-delaware-1868.jpg!Large.jpg", "s3a://data-cb03c/crawl/wikiart/images/william-shayer/the-cowherd.jpg!Large.jpg"
       )
     )
-//    val styles = resolve(log)
+    //    val styles = resolve(log)
 
     for ((styleKey, styleFiles) <- styles) {
       log.h1(styleKey)
-      log.subreport(styleKey + "_images", (sub:NotebookOutput)=>{
+      log.subreport(styleKey + "_images", (sub: NotebookOutput) => {
         for (url <- styleFiles) sub.p(sub.jpg(VisionPipelineUtil.load(url, -1), url))
         null
       })
@@ -133,21 +127,21 @@ class TextureOperatorSurvey extends ArtSetup[Object] with BasicOptimizer {
       }
     }
 
-//    paint(crossProductStyleNetwork(log.eval(() => {
-//      List(
-//        new ChannelMeanMatcher()
-//      )
-//    }): _*), styleFiles)
-//    paint(crossProductStyleNetwork(log.eval(() => {
-//      List(
-//        new GramMatrixMatcher().setTileSize(tileSize)
-//      )
-//    }): _*), styleFiles)
-//    paint(crossProductStyleNetwork(log.eval(() => {
-//      List(
-//        new GramMatrixEnhancer().setMinMax(-0.25, 0.25).setTileSize(tileSize)
-//      )
-//    }): _*), styleFiles)
+    //    paint(crossProductStyleNetwork(log.eval(() => {
+    //      List(
+    //        new ChannelMeanMatcher()
+    //      )
+    //    }): _*), styleFiles)
+    //    paint(crossProductStyleNetwork(log.eval(() => {
+    //      List(
+    //        new GramMatrixMatcher().setTileSize(tileSize)
+    //      )
+    //    }): _*), styleFiles)
+    //    paint(crossProductStyleNetwork(log.eval(() => {
+    //      List(
+    //        new GramMatrixEnhancer().setMinMax(-0.25, 0.25).setTileSize(tileSize)
+    //      )
+    //    }): _*), styleFiles)
     paint(crossProductStyleNetwork(log.eval(() => {
       List(
         new ChannelMeanMatcher(),
@@ -186,7 +180,13 @@ class TextureOperatorSurvey extends ArtSetup[Object] with BasicOptimizer {
     }
   }
 
-  def resolve(log: NotebookOutput):Map[String, Array[String]] = {
+  def resolutions = (if (growth > 1) Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution) else List(minResolution, maxResolution).distinct).map(_.toInt).toArray
+
+  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
+
+  def precision(w: Int) = if (w <= minResolution) Precision.Double else Precision.Float
+
+  def resolve(log: NotebookOutput): Map[String, Array[String]] = {
     log.eval(() => {
       val map = List(
         "landscsapes" ->

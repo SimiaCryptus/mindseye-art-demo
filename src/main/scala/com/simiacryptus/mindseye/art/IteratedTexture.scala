@@ -148,53 +148,6 @@ class IteratedTexture extends ArtSetup[Object] {
 
   def precision = Precision.Float
 
-  def styleLayers: Seq[VisionPipelineLayer] = List(
-    Inc5H_1a,
-    Inc5H_2a,
-    Inc5H_3a,
-    Inc5H_3b,
-    //        Inc5H_4a,
-    //        Inc5H_4b,
-    //        Inc5H_4c,
-    //Inc5H_4d,
-    //Inc5H_4e,
-    //Inc5H_5a,
-    //Inc5H_5b,
-
-    //    VGG16_0,
-    //    VGG16_1a,
-    //    VGG16_1b1,
-    //    VGG16_1b2,
-    //    VGG16_1c1,
-    //    VGG16_1c2,
-    //    VGG16_1c3,
-    //    VGG16_1d1,
-    //    VGG16_1d2,
-    //    VGG16_1d3
-    //    VGG16_1e1,
-    //    VGG16_1e2,
-    //    VGG16_1e3
-    //    VGG16_2
-
-    VGG19_0,
-    VGG19_1a,
-    VGG19_1b1,
-    VGG19_1b2,
-    VGG19_1c1,
-    VGG19_1c2,
-    VGG19_1c3,
-    VGG19_1c4,
-    VGG19_1d1,
-    VGG19_1d2,
-    VGG19_1d3
-    //        VGG19_1d4
-    //    VGG19_1e1,
-    //    VGG19_1e2,
-    //    VGG19_1e3,
-    //    VGG19_1e4
-    //    VGG19_2
-  )
-
   def loadImages(baseImage: Tensor, fileUrls: Array[String], minWidth: Int, maxWidth: Int, magnification: Double, maxPixels: Double)(implicit log: NotebookOutput) = {
     val styles = Random.shuffle(fileUrls.toList).map(styleUrl => {
       var styleImage = VisionPipelineUtil.load(styleUrl, -1)
@@ -260,6 +213,53 @@ class IteratedTexture extends ArtSetup[Object] {
     }
     canvasImage
   }
+
+  def styleLayers: Seq[VisionPipelineLayer] = List(
+    Inc5H_1a,
+    Inc5H_2a,
+    Inc5H_3a,
+    Inc5H_3b,
+    //        Inc5H_4a,
+    //        Inc5H_4b,
+    //        Inc5H_4c,
+    //Inc5H_4d,
+    //Inc5H_4e,
+    //Inc5H_5a,
+    //Inc5H_5b,
+
+    //    VGG16_0,
+    //    VGG16_1a,
+    //    VGG16_1b1,
+    //    VGG16_1b2,
+    //    VGG16_1c1,
+    //    VGG16_1c2,
+    //    VGG16_1c3,
+    //    VGG16_1d1,
+    //    VGG16_1d2,
+    //    VGG16_1d3
+    //    VGG16_1e1,
+    //    VGG16_1e2,
+    //    VGG16_1e3
+    //    VGG16_2
+
+    VGG19_0,
+    VGG19_1a,
+    VGG19_1b1,
+    VGG19_1b2,
+    VGG19_1c1,
+    VGG19_1c2,
+    VGG19_1c3,
+    VGG19_1c4,
+    VGG19_1d1,
+    VGG19_1d2,
+    VGG19_1d3
+    //        VGG19_1d4
+    //    VGG19_1e1,
+    //    VGG19_1e2,
+    //    VGG19_1e3,
+    //    VGG19_1e4
+    //    VGG19_2
+  )
 
   def styleEnhancement(width: Int): Double = if (width < 256) 1e1 else if (width < 512) 1e0 else 0
 

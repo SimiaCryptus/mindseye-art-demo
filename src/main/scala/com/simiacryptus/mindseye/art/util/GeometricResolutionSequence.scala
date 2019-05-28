@@ -22,10 +22,13 @@ package com.simiacryptus.mindseye.art.util
 trait GeometricResolutionSequence {
 
   def minResolution: Int
+
   def maxResolution: Int
+
   def resolutionSteps: Int
 
-  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
   def resolutions = Stream.iterate(minResolution.toDouble)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt)
+
+  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
 
 }

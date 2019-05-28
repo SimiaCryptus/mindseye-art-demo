@@ -23,11 +23,9 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.models.PoolingPipeline._
 import com.simiacryptus.mindseye.art.models.VGG19
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher, ContentMatcher}
-import com.simiacryptus.mindseye.art.util.ArtUtil._
+import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, ContentMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util._
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, Precision}
@@ -58,7 +56,9 @@ object ContentZoomDemo_Local extends ContentZoomDemo with LocalRunner[Object] wi
 
 class ContentZoomDemo extends ArtSetup[Object] with BasicOptimizer {
   val contentUrl = "file:///C:/Users/andre/Downloads/IMG_20190422_150855449.jpg"
+
   override def maxRate = 1e8
+
   override def trainingIterations = 50
 
   override def cudaLog = false
@@ -76,7 +76,7 @@ class ContentZoomDemo extends ArtSetup[Object] with BasicOptimizer {
         null
       })
       null
-    } (log)
+    }(log)
     null
   }
 

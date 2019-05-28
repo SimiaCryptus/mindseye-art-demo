@@ -23,10 +23,10 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, CartesianStyleNetwork, Permutation}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.lang.{Coordinate, Tensor}
+import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, CartesianStyleNetwork, Permutation}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, Precision}
+import com.simiacryptus.mindseye.lang.{Coordinate, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.ImgBandBiasLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
 import com.simiacryptus.mindseye.layers.java.{ImgViewLayer, LinearActivationLayer, SumInputsLayer}
@@ -71,12 +71,6 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
 
   override def cudaLog = false
 
-  def resolutions = Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt).toArray
-
-  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
-
-  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
-
   override def postConfigure(log: NotebookOutput) = {
     log.eval(() => {
       ScalaJson.toJson(Map(
@@ -104,18 +98,18 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
               null
             })
             null
-          } (log)
-        } (log)
+          }(log)
+        }(log)
         null
-      } (log)
+      }(log)
     }
     null
   }
 
-  def paint(canvas: AtomicReference[Tensor], rendering: AtomicReference[()=>Tensor], animation: AtomicReference[()=>Seq[Tensor]], network: CartesianStyleNetwork)(implicit sub: NotebookOutput): Unit = {
-    rendering.set(()=>{
+  def paint(canvas: AtomicReference[Tensor], rendering: AtomicReference[() => Tensor], animation: AtomicReference[() => Seq[Tensor]], network: CartesianStyleNetwork)(implicit sub: NotebookOutput): Unit = {
+    rendering.set(() => {
       val canvasImg = canvas.get
-      if(null == canvasImg) null
+      if (null == canvasImg) null
       else getKaleidoscope(canvasImg.getDimensions).eval(canvasImg).getDataAndFree.getAndFree(0)
     })
     for (res <- resolutions) {
@@ -134,7 +128,7 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
       val viewLayer = kaleidoscope.copyPipeline()
       viewLayer.wrap(new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
         .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)).freeRef()
-      animation.set(()=>{
+      animation.set(() => {
         val image = kaleidoscope.eval(canvas.get).getDataAndFree.getAndFree(0)
         val arc = 2 * Math.PI / rotationalSegments
         val permutation = Permutation(this.rotationalChannelPermutation: _*).matrix
@@ -168,6 +162,12 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
       ).apply(canvas.get))
     }
   }
+
+  def resolutions = Stream.iterate(minResolution)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt).toArray
+
+  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
+
+  def precision(w: Int) = if (w < 200) Precision.Double else Precision.Float
 
   def getKaleidoscope(canvasDims: Array[Int]) = {
     val permutation = Permutation(this.rotationalChannelPermutation: _*)
