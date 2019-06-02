@@ -41,11 +41,11 @@ object Permutation {
     }).flatMap(_.permutations).map(Permutation(_: _*))
   }
 
-  def apply(indices: Int*) = new Permutation(indices.toArray)
-
   def roots(rank: Int, power: Int) = Random.shuffle(rings(rank)(power).flatMap(_.dropRight(1)).toStream)
 
   def unity(n: Int) = Permutation((1 to n).toArray: _*)
+
+  def apply(indices: Int*) = new Permutation(indices.toArray)
 }
 
 class Permutation(val indices: Array[Int]) {

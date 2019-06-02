@@ -134,12 +134,12 @@ class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
                 globalCanvas.set(canvas)
                 val result = trainable.measure(new TrainingMonitor).sum
                 canvas.freeRef()
-                tableOutput.putRow(Map(
+                tableOutput.putRow(Map[CharSequence, AnyRef](
                   "source" -> styleFile,
                   "target" -> canvasFile,
                   "op_layer" -> styleLayer.name(),
                   "op_type" -> op.getClass.getSimpleName,
-                  "result" -> result
+                  "result" -> result.asInstanceOf[java.lang.Double]
                 ).asJava)
                 result
               })
