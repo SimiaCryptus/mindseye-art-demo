@@ -66,7 +66,7 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
   val minResolution: Double = 128
   val maxResolution: Double = 512
   val resolutionSteps: Int = 4
-  val rotationalSegments = 4
+  val rotationalSegments = 3
   val rotationalChannelPermutation = Permutation.roots(3, rotationalSegments).head.indices
 
   override def cudaLog = false
@@ -78,7 +78,7 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
       ))
     })
     for ((name, styleNetwork) <- Map(
-      "cesar-domela-1" -> CartesianStyleNetwork.DOMELA_1,
+      //"cesar-domela-1" -> CartesianStyleNetwork.DOMELA_1,
       "claude-monet-1" -> CartesianStyleNetwork.MONET_1
     )) {
       log.h1(name)

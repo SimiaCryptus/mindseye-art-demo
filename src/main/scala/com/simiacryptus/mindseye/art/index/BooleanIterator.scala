@@ -164,8 +164,8 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
     selfEntropyNet.wrap(classifier)
     selfEntropyNet.wrap(new EntropyLossLayer(), selfEntropyNet.getHead, selfEntropyNet.getHead)
 
-    def bestSamples(sample: Int) = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(filterIndex.rdd.sortBy(r => {
-      val array = r.getAs[Seq[Double]]("data").toArray
+    def bestSamples(sample: Int) = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(filterIndex.rdd.sortBy(row => {
+      val array = row.getAs[Seq[Double]]("data").toArray
       val tensor = new Tensor(array, 1, 1, array.length)
       val result = selfEntropyNet.eval(tensor).getDataAndFree.getAndFree(0)
       val v = result.get(0)

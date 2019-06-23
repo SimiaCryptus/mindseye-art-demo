@@ -214,6 +214,8 @@ class IteratedTexture extends ArtSetup[Object] {
     canvasImage
   }
 
+  def styleEnhancement(width: Int): Double = if (width < 256) 1e1 else if (width < 512) 1e0 else 0
+
   def styleLayers: Seq[VisionPipelineLayer] = List(
     Inc5H_1a,
     Inc5H_2a,
@@ -260,7 +262,5 @@ class IteratedTexture extends ArtSetup[Object] {
     //    VGG19_1e4
     //    VGG19_2
   )
-
-  def styleEnhancement(width: Int): Double = if (width < 256) 1e1 else if (width < 512) 1e0 else 0
 
 }

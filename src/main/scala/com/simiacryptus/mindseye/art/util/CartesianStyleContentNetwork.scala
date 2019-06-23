@@ -58,23 +58,21 @@ case class CartesianStyleContentNetwork
       new TiledTrainable(canvas, viewLayer, tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           val network = if (null == styleNetwork) {
-            MultiPrecision.setPrecision(
-              SumInputsLayer.combine(
-                contentLayers.filter(x => x.getPipeline.name == name)
-                  .map(layer => contentModifiers.reduce(_ combine _).build(
-                    layer,
-                    regionSelector.eval(content).getDataAndFree.getAndFree(0)
-                  )): _*
-              ), precision).asInstanceOf[PipelineNetwork]
+            MultiPrecision.setPrecision(SumInputsLayer.combine(
+              contentLayers.filter(x => x.getPipeline.name == name)
+                .map(layer => contentModifiers.reduce(_ combine _).build(
+                  layer,
+                  regionSelector.eval(content).getDataAndFree.getAndFree(0)
+                )): _*
+            ), precision).asInstanceOf[PipelineNetwork]
           } else {
-            MultiPrecision.setPrecision(
-              SumInputsLayer.combine((
-                List(styleNetwork.addRef()) ++ contentLayers.filter(x => x.getPipeline.name == name)
-                  .map(layer => contentModifiers.reduce(_ combine _).build(
-                    layer,
-                    regionSelector.eval(content).getDataAndFree.getAndFree(0)
-                  ))
-                ): _*), precision).asInstanceOf[PipelineNetwork]
+            MultiPrecision.setPrecision(SumInputsLayer.combine((
+              List(styleNetwork.addRef()) ++ contentLayers.filter(x => x.getPipeline.name == name)
+                .map(layer => contentModifiers.reduce(_ combine _).build(
+                  layer,
+                  regionSelector.eval(content).getDataAndFree.getAndFree(0)
+                ))
+              ): _*), precision).asInstanceOf[PipelineNetwork]
           }
           regionSelector.freeRef()
           network

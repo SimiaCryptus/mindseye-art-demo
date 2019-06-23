@@ -21,7 +21,7 @@ package com.simiacryptus.mindseye.art.util
 
 import com.simiacryptus.mindseye.art._
 import com.simiacryptus.mindseye.art.models.VGG19._
-import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, ContentMatcher, GramMatrixEnhancer, GramMatrixMatcher}
+import com.simiacryptus.mindseye.art.ops._
 import com.simiacryptus.mindseye.eval.Trainable
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -50,8 +50,9 @@ object CartesianStyleNetwork {
       VGG19_1d4,
       VGG19_1e4),
     styleModifiers = List(
-      new ChannelMeanMatcher(),
-      new GramMatrixMatcher().setTileSize(400),
+      //      new ChannelMeanMatcher(),
+      //      new GramMatrixMatcher().setTileSize(400),
+      new MomentMatcher().setTileSize(400),
       new GramMatrixEnhancer().setMinMax(-.25, .25).setTileSize(400)
     ),
     styleUrl = ArtUtil.findFiles("claude-monet")

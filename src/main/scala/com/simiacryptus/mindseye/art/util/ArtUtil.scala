@@ -59,6 +59,7 @@ object ArtUtil {
   }
 
   def load(content: Tensor, url: String)(implicit log: NotebookOutput): Tensor = {
+    val sumRegex = """(\d+)\+(.*)""".r
     val noiseRegex = "noise(.*)".r
     val contentDims = content.getDimensions
     url match {
@@ -66,6 +67,7 @@ object ArtUtil {
       case "plasma" => Tensor.fromRGB(log.eval(() => {
         new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
       }))
+      case sumRegex(offset: String, rest: String) => load(content, rest).mapAndFree((operand: Double) => offset.toInt + operand)
       case noiseRegex(ampl: String) => Tensor.fromRGB(log.eval(() => {
         new Tensor(contentDims: _*).map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
       }))
@@ -139,21 +141,6 @@ object ArtUtil {
     colorAdjustmentLayer
   }
 
-  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
-    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
-    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
-      .getDataAndFree.getAndFree(0).toRgbImage
-    assemblyLayer.freeRef()
-    grid
-  }).orNull
-
-  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
-    val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
-      fn(getTrainingMonitor(history))
-    }
-  }
-
   def getTrainingMonitor[T](history: ArrayBuffer[StepRecord] = new ArrayBuffer[StepRecord], verbose: Boolean = true): TrainingMonitor = {
     val trainingMonitor = new TrainingMonitor() {
       override def clear(): Unit = {
@@ -171,6 +158,21 @@ object ArtUtil {
       }
     }
     trainingMonitor
+  }
+
+  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
+    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
+    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
+      .getDataAndFree.getAndFree(0).toRgbImage
+    assemblyLayer.freeRef()
+    grid
+  }).orNull
+
+  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
+    val history = new ArrayBuffer[StepRecord]
+    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
+      fn(getTrainingMonitor(history))
+    }
   }
 
   def findFiles(key: String, base: String): Array[String] = findFiles(Set(key), base)
