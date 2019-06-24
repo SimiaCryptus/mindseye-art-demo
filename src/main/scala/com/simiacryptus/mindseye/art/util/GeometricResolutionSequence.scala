@@ -29,6 +29,6 @@ trait GeometricResolutionSequence {
 
   def resolutions = Stream.iterate(minResolution.toDouble)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt)
 
-  private def growth = Math.pow(maxResolution / minResolution, 1.0 / resolutionSteps)
+  private def growth = Math.pow(maxResolution.toDouble / minResolution, 1.0 / (resolutionSteps-1))
 
 }
