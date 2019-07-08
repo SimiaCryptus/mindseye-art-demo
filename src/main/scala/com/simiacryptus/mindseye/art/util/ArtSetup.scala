@@ -41,20 +41,21 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
   val label = "Demo"
 
   def getPaintingsBySearch(searchWord: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth)
+    getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth, 100)
   }
 
   def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth)
+    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
   }
 
-  def getPaintings(uri: URI, minWidth: Int) = {
+  def getPaintings(uri: URI, minWidth: Int, maxResults: Int): Array[String] = {
     new GsonBuilder().create().fromJson(IOUtils.toString(
       uri,
       "UTF-8"
     ), classOf[util.ArrayList[util.Map[String, AnyRef]]])
       .filter(_ ("width").asInstanceOf[Number].doubleValue() > minWidth)
       .map(_ ("image").toString.stripSuffix("!Large.jpg"))
+      .take(maxResults)
       .map(file => {
         val fileName = Normalizer.normalize(
           file.split("/").takeRight(2).mkString("/"),

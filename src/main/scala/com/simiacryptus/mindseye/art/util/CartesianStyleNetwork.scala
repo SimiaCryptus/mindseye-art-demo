@@ -183,6 +183,12 @@ case class CartesianStyleNetwork
     precision = precision,
     viewLayer = viewLayer,
     contentLayers = contentLayers,
-    contentModifiers = contentModifiers
+    contentModifiers = contentModifiers,
+    tilePadding = tilePadding,
+    tileSize = tileSize,
+    minWidth = minWidth,
+    maxWidth = maxWidth,
+    maxPixels = maxPixels,
+    magnification = magnification
   )
 }

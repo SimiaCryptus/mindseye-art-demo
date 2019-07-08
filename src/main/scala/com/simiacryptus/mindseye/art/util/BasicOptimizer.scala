@@ -24,8 +24,9 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.mindseye.art.util.ArtUtil.withTrainingMonitor
 import com.simiacryptus.mindseye.eval.Trainable
+import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.opt.IterativeTrainer
+import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, LineSearchStrategy}
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.{CompoundRegion, RangeConstraint}
@@ -42,7 +43,17 @@ trait BasicOptimizer {
           val lineSearchInstance: LineSearchStrategy = lineSearchFactory
           IterativeTrainer.wrap(trainable)
             .setOrientation(orientation())
-            .setMonitor(trainingMonitor)
+            .setMonitor(new TrainingMonitor(){
+              override def clear(): Unit = trainingMonitor.clear()
+
+              override def log(msg: String): Unit = trainingMonitor.log(msg)
+
+              override def onStepComplete(currentPoint: Step): Unit = {
+                BasicOptimizer.this.onStepComplete(trainable, currentPoint)
+                trainingMonitor.onStepComplete(currentPoint)
+                super.onStepComplete(currentPoint)
+              }
+            })
             .setTimeout(trainingMinutes, TimeUnit.MINUTES)
             .setMaxIterations(trainingIterations)
             .setLineSearchFactory((_: CharSequence) => lineSearchInstance)
@@ -52,6 +63,9 @@ trait BasicOptimizer {
         })
       })
     }
+  }
+
+  def onStepComplete(trainable: Trainable, currentPoint: Step) = {
   }
 
   def trainingMinutes: Int = 60

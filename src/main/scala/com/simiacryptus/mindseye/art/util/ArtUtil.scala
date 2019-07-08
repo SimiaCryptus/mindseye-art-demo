@@ -69,7 +69,10 @@ object ArtUtil {
       }))
       case sumRegex(offset: String, rest: String) => load(content, rest).mapAndFree((operand: Double) => offset.toInt + operand)
       case noiseRegex(ampl: String) => Tensor.fromRGB(log.eval(() => {
-        new Tensor(contentDims: _*).map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
+        val tensor = new Tensor(contentDims: _*).mapAndFree((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100))
+        val rgbImage = tensor.toRgbImage
+        tensor.freeRef()
+        rgbImage
       }))
       case _ => Tensor.fromRGB(log.eval(() => {
         VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
@@ -85,7 +88,10 @@ object ArtUtil {
         new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
       }))
       case noiseRegex(ampl: String) => Tensor.fromRGB(log.eval(() => {
-        new Tensor(contentDims: _*).map((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100)).toRgbImage
+        val tensor = new Tensor(contentDims: _*).mapAndFree((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100))
+        val rgbImage = tensor.toRgbImage
+        tensor.freeRef()
+        rgbImage
       }))
       case _ => Tensor.fromRGB(log.eval(() => {
         VisionPipelineUtil.load(url, contentDims(0), contentDims(1))

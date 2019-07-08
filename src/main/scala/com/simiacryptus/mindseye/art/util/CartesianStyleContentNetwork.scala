@@ -50,35 +50,37 @@ case class CartesianStyleContentNetwork
 
   def apply(canvas: Tensor, content: Tensor): Trainable = {
     val loadedImages = loadImages(CartesianStyleNetwork.pixels(canvas))
+    val styleModifier = styleModifiers.reduce(_ combine _)
+    val contentModifier = contentModifiers.reduce(_ combine _)
     val grouped: Map[String, PipelineNetwork] = contentLayers.map(_.getPipeline.name -> null).toMap ++ styleLayers.groupBy(_.getPipeline.name).mapValues(pipelineLayers => {
-      SumInputsLayer.combine(pipelineLayers.filter(x => styleLayers.contains(x)).map(styleModifiers.reduce(_ combine _).build(_, loadedImages: _*)): _*)
+      SumInputsLayer.combine(pipelineLayers.map(styleModifier.build(_, loadedImages: _*)): _*)
     })
+    loadedImages.foreach(_.freeRef())
     new SumTrainable(grouped.map(t => {
       val (name, styleNetwork) = t
       new TiledTrainable(canvas, viewLayer, tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-          val network = if (null == styleNetwork) {
+          val selection = regionSelector.eval(content).getDataAndFree.getAndFree(0)
+          regionSelector.freeRef()
+          if (null == styleNetwork) {
             MultiPrecision.setPrecision(SumInputsLayer.combine(
               contentLayers.filter(x => x.getPipeline.name == name)
-                .map(layer => contentModifiers.reduce(_ combine _).build(
-                  layer,
-                  regionSelector.eval(content).getDataAndFree.getAndFree(0)
-                )): _*
-            ), precision).asInstanceOf[PipelineNetwork]
+                .map(contentModifier.build(_, selection)): _*
+            ), precision)
           } else {
-            MultiPrecision.setPrecision(SumInputsLayer.combine((
+            MultiPrecision.setPrecision(SumInputsLayer.combine(
               List(styleNetwork.addRef()) ++ contentLayers.filter(x => x.getPipeline.name == name)
-                .map(layer => contentModifiers.reduce(_ combine _).build(
-                  layer,
-                  regionSelector.eval(content).getDataAndFree.getAndFree(0)
-                ))
-              ): _*), precision).asInstanceOf[PipelineNetwork]
+                .map(contentModifier.build(_, selection)): _*
+            ), precision)
           }
-          regionSelector.freeRef()
-          network
+        }
+
+        override protected def _free(): Unit = {
+          if (null != styleNetwork) styleNetwork.freeRef()
+          super._free()
         }
       }
-    }).toList: _*)
+    }).toArray: _*)
   }
 
 }

@@ -127,7 +127,7 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
       val kaleidoscope = getKaleidoscope(canvasDims)
       val viewLayer = kaleidoscope.copyPipeline()
       viewLayer.wrap(new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
-        .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)).freeRef()
+              .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)).freeRef()
       animation.set(() => {
         val image = kaleidoscope.eval(canvas.get).getDataAndFree.getAndFree(0)
         val arc = 2 * Math.PI / rotationalSegments
@@ -174,14 +174,14 @@ class RotatedTexture extends ArtSetup[Object] with BasicOptimizer {
     require(permutation.unity == (permutation ^ rotationalSegments), s"$permutation ^ $rotationalSegments => ${(permutation ^ rotationalSegments)} != ${permutation.unity}")
     val network = new PipelineNetwork(1)
     network.add(new SumInputsLayer(), (0 until rotationalSegments)
-      .map(segment => {
-        if (0 == segment) network.getInput(0) else {
-          network.wrap(
-            getRotor(segment * 2 * Math.PI / rotationalSegments, canvasDims).setChannelSelector((permutation ^ segment).indices: _*),
-            network.getInput(0)
-          )
-        }
-      }): _*).freeRef()
+          .map(segment => {
+            if (0 == segment) network.getInput(0) else {
+              network.wrap(
+                getRotor(segment * 2 * Math.PI / rotationalSegments, canvasDims).setChannelSelector((permutation ^ segment).indices: _*),
+                network.getInput(0)
+              )
+            }
+          }): _*).freeRef()
     network.wrap(new LinearActivationLayer().setScale(1.0 / rotationalSegments).freeze()).freeRef()
     network
   }
