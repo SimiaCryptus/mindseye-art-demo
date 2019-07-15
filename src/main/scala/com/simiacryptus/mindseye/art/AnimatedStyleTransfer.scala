@@ -95,7 +95,7 @@ abstract class AnimatedStyleTransfer extends ArtSetup[Object] {
       .combine(new GramMatrixEnhancer().setTileSize(300))
     val colorOperator = new GramMatrixMatcher().setTileSize(300).combine(new ChannelMeanMatcher).scale(1e1)
     val styleGate = new LinearActivationLayer().setScale(1).setBias(0).freeze().asInstanceOf[LinearActivationLayer]
-    val styleNetworks = styleLayers.groupBy(_.getPipeline.name).mapValues(pipelineLayers => {
+    val styleNetworks = styleLayers.groupBy(_.getPipelineName).mapValues(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNet = SumInputsLayer.combine((
         pipelineStyleLayers.map(styleOperator.build(_, adjColor(contentImage, Tensor.fromRGB(VisionPipelineUtil.load(styleUrl, styleResolution)))(new NullNotebookOutput()))) ++ List(

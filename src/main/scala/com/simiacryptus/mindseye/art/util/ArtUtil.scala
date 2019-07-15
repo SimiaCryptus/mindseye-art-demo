@@ -20,37 +20,93 @@
 package com.simiacryptus.mindseye.art.util
 
 import java.awt.image.BufferedImage
+import java.io.File
 import java.net.URI
+import java.util
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.mindseye.art._
 import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
-import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
+import com.simiacryptus.mindseye.eval.Trainable
+import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.ImgBandBiasLayer
 import com.simiacryptus.mindseye.layers.cudnn.conv.SimpleConvolutionLayer
 import com.simiacryptus.mindseye.layers.java.ImgTileAssemblyLayer
-import com.simiacryptus.mindseye.network.PipelineNetwork
+import com.simiacryptus.mindseye.network.{DAGNetwork, PipelineNetwork}
 import com.simiacryptus.mindseye.opt.line.QuadraticSearch
 import com.simiacryptus.mindseye.opt.orient.TrustRegionStrategy
 import com.simiacryptus.mindseye.opt.region.{OrthonormalConstraint, TrustRegion}
 import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
-import com.simiacryptus.notebook.{NotebookOutput, NullNotebookOutput}
+import com.simiacryptus.notebook._
 import com.simiacryptus.sparkbook.NotebookRunner
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.util.{FastRandom, Util}
 import org.apache.hadoop.fs.{FileSystem, Path}
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
 
 object ArtUtil {
+
+  private val pngCache = new mutable.HashMap[String, Try[File]]()
+
+  def userSelect(paintings: Array[String])(implicit log: NotebookOutput): HtmlQuery[Map[String, Boolean]] = {
+    val ids = paintings.map(_ -> UUID.randomUUID().toString).toMap
+    new FormQuery[Map[String, Boolean]](log.asInstanceOf[MarkdownNotebookOutput]) {
+
+      override def height(): Int = 800
+
+      override protected def getFormInnerHtml: String = {
+        (for ((url, v) <- getValue.toList.filter(_._2)) yield {
+          val filename = url.split('/').last.toLowerCase.stripSuffix(".png") + ".png"
+          if (pngCache.getOrElseUpdate(url, Try {
+            log.pngFile(VisionPipelineUtil.load(url, 256), new File(log.getResourceDir, filename))
+          }).isSuccess) {
+            s"""<input type="checkbox" name="${ids(url)}" value="true"><img src="etc/$filename" alt="$url"><br/>"""
+          } else {
+            ""
+          }
+        }).mkString("\n")
+      }
+
+      override def valueFromParams(parms: util.Map[String, String]): Map[String, Boolean] = {
+        (for ((k, v) <- getValue) yield {
+          k -> parms.getOrDefault(ids(k), "false").toBoolean
+        })
+      }
+    }.setValue(paintings.map(_ -> true).toMap).print()
+  }
+
+  def setPrecision(trainable: Trainable, precision: Precision): Boolean = {
+    if (CudaSettings.INSTANCE().defaultPrecision == precision) {
+      false
+    } else {
+      CudaSettings.INSTANCE().defaultPrecision = precision
+      resetPrecision(trainable, precision)
+      true
+    }
+  }
+
+  def resetPrecision(trainable: Trainable, precision: Precision) = {
+    trainable match {
+      case trainable: SumTrainable =>
+        for (layer <- trainable.getInner) setPrecision(layer, precision)
+      case trainable: TiledTrainable =>
+        trainable.setPrecision(precision)
+      case trainable: Trainable if null != trainable.getLayer =>
+        MultiPrecision.setPrecision(trainable.getLayer.asInstanceOf[DAGNetwork], precision)
+    }
+  }
 
   def pipelineGraphs(pipeline: VisionPipeline[VisionPipelineLayer])(implicit log: NotebookOutput) = {
     log.subreport(pipeline.name + "_Layers", (sublog: NotebookOutput) => {
       import scala.collection.JavaConverters._
-      pipeline.getLayers.keySet().asScala.foreach(layer => {
+      pipeline.getLayers().asScala.foreach(layer => {
         sublog.h1(layer.name())
         TestUtil.graph(sublog, layer.getLayer.asInstanceOf[PipelineNetwork])
       })

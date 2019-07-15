@@ -24,12 +24,11 @@ import java.util.concurrent.TimeUnit
 
 import com.simiacryptus.mindseye.art.util.ArtUtil.withTrainingMonitor
 import com.simiacryptus.mindseye.eval.Trainable
-import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
-import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.opt.line.{ArmijoWolfeSearch, LineSearchStrategy}
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.{CompoundRegion, RangeConstraint}
+import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook.util.Java8Util._
@@ -37,35 +36,48 @@ import com.simiacryptus.sparkbook.util.Java8Util._
 trait BasicOptimizer {
 
   def optimize(canvasImage: Tensor, trainable: Trainable)(implicit log: NotebookOutput) = {
-    withMonitoredJpg(canvasImage.toRgbImage) {
-      withTrainingMonitor(trainingMonitor => {
-        log.eval(() => {
-          val lineSearchInstance: LineSearchStrategy = lineSearchFactory
-          IterativeTrainer.wrap(trainable)
-            .setOrientation(orientation())
-            .setMonitor(new TrainingMonitor(){
-              override def clear(): Unit = trainingMonitor.clear()
+    try {
+      withMonitoredJpg(canvasImage.toRgbImage) {
+        withTrainingMonitor(trainingMonitor => {
+          log.eval(() => {
+            val lineSearchInstance: LineSearchStrategy = lineSearchFactory
+            IterativeTrainer.wrap(trainable)
+              .setOrientation(orientation())
+              .setMonitor(new TrainingMonitor() {
+                override def clear(): Unit = trainingMonitor.clear()
 
-              override def log(msg: String): Unit = trainingMonitor.log(msg)
+                override def log(msg: String): Unit = trainingMonitor.log(msg)
 
-              override def onStepComplete(currentPoint: Step): Unit = {
-                BasicOptimizer.this.onStepComplete(trainable, currentPoint)
-                trainingMonitor.onStepComplete(currentPoint)
-                super.onStepComplete(currentPoint)
-              }
-            })
-            .setTimeout(trainingMinutes, TimeUnit.MINUTES)
-            .setMaxIterations(trainingIterations)
-            .setLineSearchFactory((_: CharSequence) => lineSearchInstance)
-            .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
-            .runAndFree
-            .asInstanceOf[lang.Double]
+                override def onStepFail(currentPoint: Step): Boolean = {
+                  BasicOptimizer.this.onStepFail(trainable, currentPoint)
+                }
+
+                override def onStepComplete(currentPoint: Step): Unit = {
+                  BasicOptimizer.this.onStepComplete(trainable, currentPoint)
+                  trainingMonitor.onStepComplete(currentPoint)
+                  super.onStepComplete(currentPoint)
+                }
+              })
+              .setTimeout(trainingMinutes, TimeUnit.MINUTES)
+              .setMaxIterations(trainingIterations)
+              .setLineSearchFactory((_: CharSequence) => lineSearchInstance)
+              .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
+              .runAndFree
+              .asInstanceOf[lang.Double]
+          })
         })
-      })
+      }
+    } finally {
+      onComplete()
     }
   }
 
-  def onStepComplete(trainable: Trainable, currentPoint: Step) = {
+  def onComplete()(implicit log: NotebookOutput) = {}
+
+  def onStepComplete(trainable: Trainable, currentPoint: Step) = {}
+
+  def onStepFail(trainable: Trainable, currentPoint: Step) = {
+    false
   }
 
   def trainingMinutes: Int = 60

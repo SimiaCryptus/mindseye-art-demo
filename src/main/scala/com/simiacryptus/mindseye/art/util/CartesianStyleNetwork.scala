@@ -150,17 +150,17 @@ case class CartesianStyleNetwork
   styleUrl: Seq[String],
   precision: Precision = Precision.Float,
   viewLayer: Layer = new PipelineNetwork(1),
-  override val tileSize: Int = 400,
-  override val tilePadding: Int = 16,
+  override val tileSize: Int = 1200,
+  override val tilePadding: Int = 64,
   override val minWidth: Int = 1,
-  override val maxWidth: Int = 2048,
-  override val maxPixels: Double = 5e6,
+  override val maxWidth: Int = 10000,
+  override val maxPixels: Double = 5e8,
   override val magnification: Double = 1.0
-) extends ImageSource(styleUrl) {
+) extends ImageSource(styleUrl) with CartesianNetwork {
 
-  def apply(canvas: Tensor): Trainable = {
+  def apply(canvas: Tensor, content: Tensor = null): Trainable = {
     val loadedImages = loadImages(CartesianStyleNetwork.pixels(canvas))
-    val grouped = styleLayers.groupBy(_.getPipeline.name).mapValues(pipelineLayers => {
+    val grouped = styleLayers.groupBy(_.getPipelineName).mapValues(pipelineLayers => {
       SumInputsLayer.combine(pipelineLayers.filter(x => styleLayers.contains(x)).map(styleModifiers.reduce(_ combine _).build(_, loadedImages: _*)): _*)
     })
     new SumTrainable((grouped.values.toList.map(styleNetwork => {

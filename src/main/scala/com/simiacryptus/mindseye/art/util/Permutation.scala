@@ -30,8 +30,6 @@ object Permutation {
     })
   }
 
-  def roots(rank: Int, power: Int) = Random.shuffle(rings(rank)(power).flatMap(_.dropRight(1)).toStream)
-
   def rings(rank: Int) = permutations(rank).map(_.ring).groupBy(_.size).mapValues(
     _.sortBy(_.map(_.indices.mkString(",")).mkString(";"))
       .groupBy(_.map(_.indices.mkString(",")).sorted.mkString(";"))
@@ -43,9 +41,11 @@ object Permutation {
     }).flatMap(_.permutations).map(Permutation(_: _*))
   }
 
-  def unity(n: Int) = Permutation((1 to n).toArray: _*)
-
   def apply(indices: Int*) = new Permutation(indices.toArray)
+
+  def roots(rank: Int, power: Int) = Random.shuffle(rings(rank)(power).flatMap(_.dropRight(1)).toStream)
+
+  def unity(n: Int) = Permutation((1 to n).toArray: _*)
 }
 
 class Permutation(val indices: Array[Int]) {
@@ -57,6 +57,8 @@ class Permutation(val indices: Array[Int]) {
   def ^(n: Int): Permutation = Stream.iterate(unity)(this * _)(n)
 
   def unity = Permutation.unity(rank)
+
+  def rank: Int = indices.length
 
   def *(right: Permutation): Permutation = Permutation(this * right.indices: _*)
 
@@ -77,8 +79,6 @@ class Permutation(val indices: Array[Int]) {
     for ((x, y, v) <- tuples) matrix.setEntry(x, y, v)
     matrix
   }
-
-  def rank: Int = indices.length
 
   def ring = {
     List(this) ++ Stream.iterate(this)(_ * this).drop(1).takeWhile(_ != this)

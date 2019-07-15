@@ -88,7 +88,7 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
 
   def survey(log: NotebookOutput, styleImage: Tensor, pipeline: VisionPipeline[_ <: VisionPipelineLayer]): Unit = {
     log.h1(pipeline.name)
-    for (layer <- pipeline.getLayers.keySet()) {
+    for (layer <- pipeline.getLayers()) {
       log.h2(layer.name())
       TestUtil.graph(log, layer.getLayer.asInstanceOf[PipelineNetwork])
       survey(styleImage, layer)(log)

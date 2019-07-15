@@ -25,8 +25,9 @@ import java.text.Normalizer
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 
+import com.amazonaws.services.s3.AmazonS3ClientBuilder
 import com.google.gson.GsonBuilder
-import com.simiacryptus.mindseye.art.recipes.PosterPainting.{contentUrl, initUrl}
+import com.simiacryptus.aws.{EC2Util, S3Util}
 import com.simiacryptus.mindseye.art.util.ArtUtil.load
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.CudaSettings
@@ -37,15 +38,22 @@ import org.apache.commons.io.{FileUtils, IOUtils}
 
 import scala.collection.JavaConversions._
 
+object ArtSetup {
+  lazy val s3client = AmazonS3ClientBuilder.standard.withRegion(EC2Util.REGION).build
+
+}
+
+import com.simiacryptus.mindseye.art.util.ArtSetup._
+
 trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
   val label = "Demo"
 
-  def getPaintingsBySearch(searchWord: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth, 100)
+  def upload(log: NotebookOutput) = {
+    S3Util.upload(s3client, log.getArchiveHome, log.getRoot)
   }
 
-  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
+  def getPaintingsBySearch(searchWord: String, minWidth: Int): Array[String] = {
+    getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth, 100)
   }
 
   def getPaintings(uri: URI, minWidth: Int, maxResults: Int): Array[String] = {
@@ -75,7 +83,11 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
       }).filterNot(_.isEmpty).toArray
   }
 
-  def paint(canvas: AtomicReference[Tensor], network: CartesianStyleContentNetwork, optimizer: BasicOptimizer, resolutions: Int*)(implicit sub: NotebookOutput): Unit = {
+  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
+    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
+  }
+
+  def paint(contentUrl: String, initUrl: String, canvas: AtomicReference[Tensor], network: CartesianNetwork, optimizer: BasicOptimizer, resolutions: Int*)(implicit sub: NotebookOutput): Unit = {
     for (res <- resolutions) {
       CudaSettings.INSTANCE().defaultPrecision = network.precision
       sub.h1("Resolution " + res)
@@ -87,8 +99,9 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
       else {
         canvas.set(Tensor.fromRGB(TestUtil.resize(canvas.get.toRgbImage, content.getWidth, content.getHeight)))
       }
-      optimizer.optimize(canvas.get, network //.copy(precision = precision)
-        .apply(canvas.get, Tensor.fromRGB(content)))
+      val trainable = network.apply(canvas.get, Tensor.fromRGB(content))
+      ArtUtil.resetPrecision(trainable, network.precision)
+      optimizer.optimize(canvas.get, trainable)
     }
   }
 

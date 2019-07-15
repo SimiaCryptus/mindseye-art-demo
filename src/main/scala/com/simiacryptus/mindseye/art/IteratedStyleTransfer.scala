@@ -240,7 +240,7 @@ class IteratedStyleTransfer extends ArtSetup[Object] {
   def styleTransfer(contentCoeff: Double, precision: Precision, contentImage: Tensor, styleImage: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
     val contentOperator = new ContentMatcher().scale(contentCoeff)
     val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
-    val trainable = new SumTrainable(((styleLayers ++ contentLayers).groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
+    val trainable = new SumTrainable(((styleLayers ++ contentLayers).groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val pipelineContentLayers = pipelineLayers.filter(x => contentLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine(pipelineStyleLayers.map(styleOperator.build(_, styleImage: _*)): _*)

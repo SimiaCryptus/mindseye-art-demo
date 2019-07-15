@@ -172,7 +172,7 @@ class IteratedTexture extends ArtSetup[Object] {
     val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val colorOperator = new ChannelMeanMatcher().combine(new GramMatrixMatcher().setTileSize(tileSize).scale(1e-1)).scale(colorCoeff)
 
-    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
+    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine(pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)): _*)
       //TestUtil.graph(log, styleNetwork)

@@ -83,7 +83,7 @@ abstract class DreamLayerSurvey extends ArtSetup[Object] {
 
   def survey(log: NotebookOutput, pipeline: VisionPipeline[_ <: VisionPipelineLayer]): Unit = {
     log.h1(pipeline.name)
-    for (layer <- pipeline.getLayers.keySet()) {
+    for (layer <- pipeline.getLayers()) {
       log.h2(layer.name())
       TestUtil.graph(log, layer.getLayer.asInstanceOf[PipelineNetwork])
       survey(layer)(log)

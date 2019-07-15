@@ -253,7 +253,7 @@ class TileBuilder extends ArtSetup[Object] {
     val styleOperator = new GramMatrixMatcher().setTileSize(currentTileSize)
       .combine(new GramMatrixEnhancer().setTileSize(currentTileSize).scale(styleEnhancement(canvasDims(0))))
     val colorOperator = new GramMatrixMatcher().setTileSize(currentTileSize).combine(new ChannelMeanMatcher).scale(colorCoeff(canvasDims(0)))
-    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
+    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine((
         pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)) ++ List(
@@ -362,19 +362,19 @@ class TileBuilder extends ArtSetup[Object] {
     selectRegion(img, positionX, positionY, width, height)
   }
 
+  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
+    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
+    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
+    tileSelectLayer.freeRef()
+    result
+  }
+
   def selectLeft(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = 0
     val width = size
     val height = img.getHeight
     selectRegion(img, positionX, positionY, width, height)
-  }
-
-  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
-    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
-    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
-    tileSelectLayer.freeRef()
-    result
   }
 
   def selectRight(img: BufferedImage, size: Int) = {

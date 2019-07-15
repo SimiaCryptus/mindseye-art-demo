@@ -187,7 +187,7 @@ class PatternTexture extends ArtSetup[Object] {
     val viewLayer = new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
       .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
     val borderedPatterns = patternImages.map(patternImage => viewLayer.eval(patternImage).getDataAndFree.getAndFree(0))
-    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipeline.name).values.toList.map(pipelineLayers => {
+    val trainable = new SumTrainable((styleLayers.groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine((
         patternImages.map(patternImage => colorOperator.build(patternImage)).toList ++
@@ -229,6 +229,8 @@ class PatternTexture extends ArtSetup[Object] {
     }
     canvasImage
   }
+
+  def styleEnhancement(width: Int): Double = 0 // if (width < 256) 1e1 else if (width < 512) 1e0 else 0
 
   def styleLayers: Seq[VisionPipelineLayer] = List(
     //    Inc5H_1a,
@@ -277,7 +279,5 @@ class PatternTexture extends ArtSetup[Object] {
     //    VGG19_1e4
     //    VGG19_2
   )
-
-  def styleEnhancement(width: Int): Double = 0 // if (width < 256) 1e1 else if (width < 512) 1e0 else 0
 
 }

@@ -31,6 +31,7 @@ object CartesianStyleContentNetwork {
 
 }
 
+
 case class CartesianStyleContentNetwork
 (
   styleLayers: Seq[VisionPipelineLayer],
@@ -46,13 +47,13 @@ case class CartesianStyleContentNetwork
   override val maxWidth: Int = 2048,
   override val maxPixels: Double = 5e6,
   override val magnification: Double = 1.0
-) extends ImageSource(styleUrl) {
+) extends ImageSource(styleUrl) with CartesianNetwork {
 
   def apply(canvas: Tensor, content: Tensor): Trainable = {
     val loadedImages = loadImages(CartesianStyleNetwork.pixels(canvas))
     val styleModifier = styleModifiers.reduce(_ combine _)
     val contentModifier = contentModifiers.reduce(_ combine _)
-    val grouped: Map[String, PipelineNetwork] = contentLayers.map(_.getPipeline.name -> null).toMap ++ styleLayers.groupBy(_.getPipeline.name).mapValues(pipelineLayers => {
+    val grouped: Map[String, PipelineNetwork] = contentLayers.map(_.getPipelineName -> null).toMap ++ styleLayers.groupBy(_.getPipelineName).mapValues(pipelineLayers => {
       SumInputsLayer.combine(pipelineLayers.map(styleModifier.build(_, loadedImages: _*)): _*)
     })
     loadedImages.foreach(_.freeRef())
@@ -64,12 +65,12 @@ case class CartesianStyleContentNetwork
           regionSelector.freeRef()
           if (null == styleNetwork) {
             MultiPrecision.setPrecision(SumInputsLayer.combine(
-              contentLayers.filter(x => x.getPipeline.name == name)
+              contentLayers.filter(x => x.getPipelineName == name)
                 .map(contentModifier.build(_, selection)): _*
             ), precision)
           } else {
             MultiPrecision.setPrecision(SumInputsLayer.combine(
-              List(styleNetwork.addRef()) ++ contentLayers.filter(x => x.getPipeline.name == name)
+              List(styleNetwork.addRef()) ++ contentLayers.filter(x => x.getPipelineName == name)
                 .map(contentModifier.build(_, selection)): _*
             ), precision)
           }
