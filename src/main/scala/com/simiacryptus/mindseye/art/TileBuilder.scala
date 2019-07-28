@@ -67,10 +67,13 @@ object TileBuilder_EC2 extends TileBuilder with EC2Runner[Object] with AWSNotebo
 }
 
 object TileBuilder_Local extends TileBuilder with LocalRunner[Object] with NotebookRunner[Object] {
+
+  override def s3bucket: String = ""
+
   override def inputTimeoutSeconds = 5
 }
 
-class TileBuilder extends ArtSetup[Object] {
+abstract class TileBuilder extends ArtSetup[Object] {
 
   private lazy val postPaintLayer = PipelineNetwork.wrap(1,
     new SimpleConvolutionLayer(1, 1, 3, 3).set((c: Coordinate) => {
@@ -326,7 +329,7 @@ class TileBuilder extends ArtSetup[Object] {
     VGG16_1e3
     //    VGG16_2
 
-    //    VGG19_0,
+    //    VGG19_0b,
     //    VGG19_1a,
     //    VGG19_1a2,
     //    VGG19_1b1,

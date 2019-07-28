@@ -60,9 +60,11 @@ object PatternTexture_EC2 extends PatternTexture with EC2Runner[Object] with AWS
 
 object PatternTexture_Local extends PatternTexture with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
+
+  override def s3bucket: String = ""
 }
 
-class PatternTexture extends ArtSetup[Object] {
+abstract class PatternTexture extends ArtSetup[Object] {
 
   val styleList = Array(
     "allan-d-arcangelo",
@@ -260,7 +262,7 @@ class PatternTexture extends ArtSetup[Object] {
     //    VGG16_1e3
     //    VGG16_2
 
-    VGG19_0
+    VGG19_0b
     //    VGG19_1a,
     //    VGG19_1a2,
     //    VGG19_1b1,

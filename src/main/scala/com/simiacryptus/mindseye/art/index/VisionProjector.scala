@@ -69,6 +69,8 @@ object VisionProjector_Local extends VisionProjector with LocalRunner[Object] wi
 
   override def spark_master = "local[1]"
 
+  override def s3bucket: String = ""
+
 }
 
 abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
@@ -162,7 +164,7 @@ object VisionProjector {
   def index(pipeline: => VisionPipeline[VisionPipelineLayer], imageSize: Int, images: String*)
            (implicit sparkSession: SparkSession) = {
     val rows = sparkSession.sparkContext.parallelize(images, images.length).flatMap(file => {
-      val layers = pipeline.getLayers
+      val layers = pipeline.getLayers.keys
       val canvas = Tensor.fromRGB(VisionPipelineUtil.load(file, imageSize))
       val tuples = layers.foldLeft(List(canvas))((input, layer) => {
         val l = layer.getLayer

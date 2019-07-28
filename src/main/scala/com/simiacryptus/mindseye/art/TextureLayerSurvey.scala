@@ -63,6 +63,8 @@ object TextureLayerSurvey_Local extends TextureLayerSurvey with LocalRunner[Obje
   override val contentResolution = 256
   override val styleResolution = 256
 
+  override def s3bucket: String = ""
+
   override def inputTimeoutSeconds = 600
 }
 
@@ -88,7 +90,7 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
 
   def survey(log: NotebookOutput, styleImage: Tensor, pipeline: VisionPipeline[_ <: VisionPipelineLayer]): Unit = {
     log.h1(pipeline.name)
-    for (layer <- pipeline.getLayers()) {
+    for (layer <- pipeline.getLayers().keys) {
       log.h2(layer.name())
       TestUtil.graph(log, layer.getLayer.asInstanceOf[PipelineNetwork])
       survey(styleImage, layer)(log)

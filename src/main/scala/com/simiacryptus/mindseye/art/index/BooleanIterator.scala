@@ -83,6 +83,8 @@ object BooleanIterator_Local extends BooleanIterator with LocalRunner[Object] wi
 
   override def spark_master = "local[1]"
 
+  override def s3bucket: String = ""
+
 }
 
 
@@ -359,18 +361,18 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
     }
 
     log.subreport(title, (sub: NotebookOutput) => {
-      new GeometricResolutionSequence {
-        override def minResolution: Int = 512
+      new GeometricSequence {
+        override def min = 512
 
-        override def maxResolution: Int = 1200
+        override def max = 1200
 
-        override def resolutionSteps: Int = 5
-      }.resolutions.foldLeft[Option[Tensor]](None)((imgOpt, res) => imgOpt.map(img => {
+        override def steps = 5
+      }.toStream.foldLeft[Option[Tensor]](None)((imgOpt, res) => imgOpt.map(img => {
         precision = Precision.Float
-        train(Tensor.fromRGB(TestUtil.resize(img.toRgbImage, res, true)), log = sub)
+        train(Tensor.fromRGB(TestUtil.resize(img.toRgbImage, res.toInt, true)), log = sub)
       }).orElse({
         precision = Precision.Double
-        val img = VisionPipelineUtil.load(content_url, res)
+        val img = VisionPipelineUtil.load(content_url, res.toInt)
         Option(train(Tensor.fromRGB(img), log = sub))
       }))
     })
@@ -415,7 +417,7 @@ object BooleanIterator {
   def index(pipeline: => VisionPipeline[VisionPipelineLayer], imageSize: Int, images: String*)
            (implicit sparkSession: SparkSession) = {
     val rows = sparkSession.sparkContext.parallelize(images, images.length).flatMap(file => {
-      val layers = pipeline.getLayers
+      val layers = pipeline.getLayers.keys
       val canvas = Tensor.fromRGB(VisionPipelineUtil.load(file, imageSize))
       val tuples = layers.foldLeft(List(canvas))((input, layer) => {
         val l = layer.getLayer

@@ -30,16 +30,15 @@ import com.simiacryptus.mindseye.art.util.ArtSetup.{ec2client, s3client}
 import com.simiacryptus.mindseye.art.util.{BasicOptimizer, _}
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.CudaMemory
+import com.simiacryptus.mindseye.layers.java.ImgViewLayer
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
-object SingleStylePaintingEC2 extends SingleStylePainting with EC2Runner[Object] with AWSNotebookRunner[Object] {
+object SingleStyleTextureEC2 extends SingleStyleTexture with EC2Runner[Object] with AWSNotebookRunner[Object] {
   override val styleUrl: String = "s3://simiacryptus/photos/shutterstock_468243743.jpg"
-  override val contentUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
-  //override val initUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
   override val s3bucket = "www.tigglegickle.com"
 
   override def nodeSettings: EC2NodeSettings = EC2NodeSettings.P3_2XL
@@ -55,14 +54,9 @@ object SingleStylePaintingEC2 extends SingleStylePainting with EC2Runner[Object]
 
 }
 
-object SingleStylePainting extends SingleStylePainting with LocalRunner[Object] with NotebookRunner[Object]
+object SingleStyleTexture extends SingleStyleTexture with LocalRunner[Object] with NotebookRunner[Object]
 
-class SingleStylePainting extends ArtSetup[Object] {
-  val contentUrl =
-    "file:///C:/Users/andre/Downloads/IMG_20170507_162514668.jpg" // Road to city
-  //    "file:///C:/Users/andre/Downloads/pictures/E2-E.jpg" // Daddys girl
-  //    "file:///C:/Users/andre/Downloads/pictures/IMG_20181107_171439630_crop.jpg" // Boy portrait
-  //    "file:///C:/Users/andre/Downloads/img11262015_0645_2.jpg" // Kids by the lake
+class SingleStyleTexture extends ArtSetup[Object] {
 
   val styleUrl =
     "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
@@ -83,13 +77,12 @@ class SingleStylePainting extends ArtSetup[Object] {
     log.onComplete(() => upload(log): Unit)
 
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 1200), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 1200), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndex(canvas)
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
-          paint(contentUrl, initUrl, canvas, sub.eval(() => {
+          paint(styleUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(
               styleLayers = List(
                 VGG19_1a,
@@ -113,28 +106,12 @@ class SingleStylePainting extends ArtSetup[Object] {
                 new MomentMatcher()
               ),
               styleUrl = List(styleUrl),
-              magnification = 2
-            ).withContent(List(
-              VGG19_1b2,
-              VGG19_1c2,
-              VGG19_1c4,
-              VGG19_1d2,
-              VGG19_1d4
-            ).flatMap(baseLayer => List(
-              baseLayer,
-              baseLayer.prependAvgPool(2),
-              baseLayer.prependAvgPool(3)
-            )), List(
-              new ContentMatcher().scale(1e0)
-            )) + new VisualStyleNetwork(
-              styleLayers = List(
-                VGG19_0a
-              ),
-              styleModifiers = List(
-                new MomentMatcher()
-              ).map(_.scale(1e2)),
-              styleUrl = List(contentUrl),
-              magnification = 1
+              magnification = 2,
+              viewLayer = dims => {
+                val padding = Math.max(16, dims(0) / 4)
+                new ImgViewLayer(dims(0) + padding, dims(1) + padding, true)
+                  .setOffsetX(-padding / 2).setOffsetY(-padding / 2)
+              }
             )
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 60
@@ -143,71 +120,6 @@ class SingleStylePainting extends ArtSetup[Object] {
           }, new GeometricSequence {
             override val min: Double = 320
             override val max: Double = 800
-            override val steps = 4
-          }.toStream: _*)(sub)
-          null
-        })
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
-          paint(contentUrl, initUrl, canvas, sub.eval(() => {
-            new VisualStyleNetwork(
-              styleLayers = List(
-                VGG19_1a,
-                VGG19_1b1,
-                VGG19_1b2,
-                VGG19_1c1,
-                VGG19_1c2,
-                VGG19_1c3,
-                VGG19_1c4
-              ).flatMap(baseLayer => List(
-                baseLayer
-              )),
-              styleModifiers = List(
-                //                new GramMatrixEnhancer(),
-                new MomentMatcher()
-              ),
-              styleUrl = List(styleUrl),
-              magnification = 1
-            ) + new VisualStyleNetwork(
-              styleLayers = List(
-                VGG19_1c1,
-                VGG19_1c2,
-                VGG19_1c3,
-                VGG19_1c4,
-                VGG19_1d1,
-                VGG19_1d2,
-                VGG19_1d3,
-                VGG19_1d4
-              ).flatMap(baseLayer => List(
-                baseLayer.prependAvgPool(2),
-                baseLayer.prependAvgPool(3),
-                baseLayer.prependAvgPool(4),
-                baseLayer.prependAvgPool(5)
-              )),
-              styleModifiers = List(
-                new GramMatrixEnhancer(),
-                new MomentMatcher()
-              ),
-              styleUrl = List(styleUrl),
-              magnification = 1
-            ).withContent(List(
-              VGG19_1b1,
-              VGG19_1c2
-            ).flatMap(baseLayer => List(
-              baseLayer,
-              baseLayer.prependAvgPool(2),
-              baseLayer.prependAvgPool(3),
-              baseLayer.prependAvgPool(4),
-              baseLayer.prependAvgPool(5)
-            )), List(
-              new ContentMatcher().scale(1e0)
-            ))
-          }), new BasicOptimizer {
-            override val trainingMinutes: Int = 90
-            override val trainingIterations: Int = 20
-            override val maxRate = 1e9
-          }, new GeometricSequence {
-            override val min: Double = 1000
-            override val max: Double = 2400
             override val steps = 4
           }.toStream: _*)(sub)
           null

@@ -105,8 +105,7 @@ object ArtUtil {
 
   def pipelineGraphs(pipeline: VisionPipeline[VisionPipelineLayer])(implicit log: NotebookOutput) = {
     log.subreport(pipeline.name + "_Layers", (sublog: NotebookOutput) => {
-      import scala.collection.JavaConverters._
-      pipeline.getLayers().asScala.foreach(layer => {
+      pipeline.getLayers().keys.foreach(layer => {
         sublog.h1(layer.name())
         TestUtil.graph(sublog, layer.getLayer.asInstanceOf[PipelineNetwork])
       })
@@ -130,12 +129,23 @@ object ArtUtil {
         tensor.freeRef()
         rgbImage
       }))
+      case null => content.copy()
       case _ => Tensor.fromRGB(log.eval(() => {
         VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
       }))
     }
   }
 
+  def cyclicalAnimation(canvases: => Seq[Tensor]): Seq[BufferedImage] = {
+    var list = canvases.filter(_ != null).map(_.toRgbImage)
+    if (list.isEmpty) {
+      Seq.empty
+    } else {
+      val maxWidth = list.map(_.getWidth).max
+      list = list.map(TestUtil.resize(_, maxWidth, true))
+      (list ++ list.reverse.tail.dropRight(1))
+    }
+  }
 
   def load(contentDims: Array[Int], url: String)(implicit log: NotebookOutput = new NullNotebookOutput()): Tensor = {
     val noiseRegex = "noise(.*)".r
@@ -149,6 +159,7 @@ object ArtUtil {
         tensor.freeRef()
         rgbImage
       }))
+      case null => new Tensor(contentDims: _*)
       case _ => Tensor.fromRGB(log.eval(() => {
         VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
       }))
@@ -203,6 +214,21 @@ object ArtUtil {
     colorAdjustmentLayer
   }
 
+  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
+    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
+    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
+      .getDataAndFree.getAndFree(0).toRgbImage
+    assemblyLayer.freeRef()
+    grid
+  }).orNull
+
+  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
+    val history = new ArrayBuffer[StepRecord]
+    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
+      fn(getTrainingMonitor(history))
+    }
+  }
+
   def getTrainingMonitor[T](history: ArrayBuffer[StepRecord] = new ArrayBuffer[StepRecord], verbose: Boolean = true): TrainingMonitor = {
     val trainingMonitor = new TrainingMonitor() {
       override def clear(): Unit = {
@@ -222,24 +248,7 @@ object ArtUtil {
     trainingMonitor
   }
 
-  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
-    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
-    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
-      .getDataAndFree.getAndFree(0).toRgbImage
-    assemblyLayer.freeRef()
-    grid
-  }).orNull
-
-  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
-    val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
-      fn(getTrainingMonitor(history))
-    }
-  }
-
   def findFiles(key: String, base: String): Array[String] = findFiles(Set(key), base)
-
-  def findFiles(key: String): Array[String] = findFiles(Set(key))
 
   def findFiles(key: Set[String], base: String = "s3a://data-cb03c/crawl/wikiart/", minSize: Int = 32 * 1024): Array[String] = {
     val itr = FileSystem.get(new URI(base), VisionPipelineUtil.getHadoopConfig()).listFiles(new Path(base), true)
@@ -251,5 +260,7 @@ object ArtUtil {
     }
     buffer.toArray
   }
+
+  def findFiles(key: String): Array[String] = findFiles(Set(key))
 
 }

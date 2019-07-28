@@ -26,14 +26,14 @@ import com.simiacryptus.mindseye.lang.cudnn.Precision
 import com.simiacryptus.mindseye.lang.{Layer, PointSample, Tensor}
 import com.simiacryptus.mindseye.opt.TrainingMonitor
 
-trait CartesianNetwork {
+trait VisualNetwork {
   def precision: Precision
 
   def apply(canvas: Tensor, content: Tensor): Trainable
 
-  def +(value: CartesianNetwork): CartesianNetwork = {
+  def +(value: VisualNetwork): VisualNetwork = {
     val inner = this
-    new CartesianNetwork {
+    new VisualNetwork {
       require(inner.precision == value.precision)
 
       override def precision: Precision = inner.precision
@@ -46,9 +46,9 @@ trait CartesianNetwork {
   }
 
 
-  def *(value: Double): CartesianNetwork = {
+  def *(value: Double): VisualNetwork = {
     val inner = this
-    new CartesianNetwork {
+    new VisualNetwork {
       override def precision: Precision = inner.precision
 
       override def apply(canvas: Tensor, content: Tensor): Trainable = new ReferenceCountingBase with Trainable {

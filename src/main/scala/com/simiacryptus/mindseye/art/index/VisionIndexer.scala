@@ -61,7 +61,10 @@ object VisionIndexer_EC2 extends VisionIndexer with EC2Runner[Object] with AWSNo
 }
 
 object VisionIndexer_Local extends VisionIndexer with LocalRunner[Object] with NotebookRunner[Object] {
+
   override val urlBase: String = "http://localhost:1080/etc/"
+
+  override def s3bucket: String = ""
 
   override def inputTimeoutSeconds = 5
 
@@ -133,7 +136,7 @@ object VisionIndexer {
   def index(pipeline: => VisionPipeline[VisionPipelineLayer], imageSize: Int, images: String*)
            (implicit sparkSession: SparkSession) = {
     val rows = sparkSession.sparkContext.parallelize(images, images.length).flatMap(file => {
-      val layers = pipeline.getLayers
+      val layers = pipeline.getLayers.keys
       val canvas = Tensor.fromRGB(VisionPipelineUtil.load(file, imageSize))
       val tuples = layers.foldLeft(List(canvas))((input, layer) => {
         val l = layer.getLayer

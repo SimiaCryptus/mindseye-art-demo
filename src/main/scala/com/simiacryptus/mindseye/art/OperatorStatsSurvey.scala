@@ -49,9 +49,11 @@ object OperatorStatsSurvey_EC2 extends OperatorStatsSurvey with EC2Runner[Object
 
 object OperatorStatsSurvey_Local extends OperatorStatsSurvey with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
+
+  override def s3bucket: String = ""
 }
 
-class OperatorStatsSurvey extends ArtSetup[Object] with BasicOptimizer {
+abstract class OperatorStatsSurvey extends ArtSetup[Object] with BasicOptimizer {
 
   val styleMagnification = 2.0
   val styleMin = 64
@@ -84,7 +86,7 @@ class OperatorStatsSurvey extends ArtSetup[Object] with BasicOptimizer {
                 "image" -> canvasName,
                 "layer" -> styleLayer.name(),
                 "op" -> op.getClass.getSimpleName,
-                "result" -> new CartesianStyleNetwork(
+                "result" -> new VisualStyleNetwork(
                   styleLayers = List(styleLayer),
                   styleModifiers = List(op),
                   styleUrl = styleFiles,

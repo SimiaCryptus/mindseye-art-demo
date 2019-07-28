@@ -56,9 +56,11 @@ object OperatorProjector_EC2 extends OperatorProjector with EC2Runner[Object] wi
 
 object OperatorProjector_Local extends OperatorProjector with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
+
+  override def s3bucket: String = ""
 }
 
-class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
+abstract class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
 
   val styleMagnification = 1.0
   val styleMin = 64
@@ -115,7 +117,7 @@ class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
           })
           val globalCanvas = new Tensor(imageSize, imageSize, 3)
           val trainables = (for (styleFile <- styleVector) yield {
-            new CartesianStyleNetwork(
+            new VisualStyleNetwork(
               styleLayers = List(styleLayer),
               styleModifiers = List(op),
               styleUrl = List(styleFile),

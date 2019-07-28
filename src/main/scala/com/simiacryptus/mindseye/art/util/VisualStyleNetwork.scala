@@ -28,8 +28,8 @@ import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 
-object CartesianStyleNetwork {
-  lazy val DOMELA_1 = new CartesianStyleNetwork(
+object VisualStyleNetwork {
+  lazy val DOMELA_1 = new VisualStyleNetwork(
     styleLayers = List(
       VGG19_1c1,
       VGG19_1c2,
@@ -42,8 +42,8 @@ object CartesianStyleNetwork {
     ),
     styleUrl = ArtUtil.findFiles("cesar-domela")
   )
-  lazy val MONET_1 = new CartesianStyleNetwork(
-    styleLayers = List(VGG19_0,
+  lazy val MONET_1 = new VisualStyleNetwork(
+    styleLayers = List(VGG19_0b,
       VGG19_1a,
       VGG19_1b2,
       VGG19_1c4,
@@ -58,8 +58,8 @@ object CartesianStyleNetwork {
     styleUrl = ArtUtil.findFiles("claude-monet")
   )
 
-  lazy val MANET_1 = new CartesianStyleNetwork(
-    styleLayers = List(VGG19_0,
+  lazy val MANET_1 = new VisualStyleNetwork(
+    styleLayers = List(VGG19_0b,
       VGG19_1b1,
       VGG19_1b2),
     styleModifiers = List(
@@ -69,7 +69,7 @@ object CartesianStyleNetwork {
     styleUrl = ArtUtil.findFiles("edouard-manet")
   )
 
-  lazy val DRAWING_1 = new CartesianStyleNetwork(
+  lazy val DRAWING_1 = new VisualStyleNetwork(
     styleLayers = List(VGG19_1a, VGG19_1b1, VGG19_1c1, VGG19_1d1, VGG19_1e1),
     styleModifiers = List(
       new ChannelMeanMatcher(),
@@ -103,7 +103,7 @@ object CartesianStyleNetwork {
     )
   )
 
-  lazy val PAINTING_1 = new CartesianStyleNetwork(
+  lazy val PAINTING_1 = new VisualStyleNetwork(
     styleLayers = List(VGG19_1a, VGG19_1b1, VGG19_1c1, VGG19_1d1, VGG19_1e1),
     styleModifiers = List(
       new ChannelMeanMatcher(),
@@ -136,38 +136,40 @@ object CartesianStyleNetwork {
 
 
   def pixels(canvas: Tensor) = {
-    val dimensions = canvas.getDimensions
-    val pixels = dimensions(0) * dimensions(1)
-    pixels
+    if (null == canvas) 0 else {
+      val dimensions = canvas.getDimensions
+      val pixels = dimensions(0) * dimensions(1)
+      pixels
+    }
   }
 
 }
 
-case class CartesianStyleNetwork
+case class VisualStyleNetwork
 (
   styleLayers: Seq[VisionPipelineLayer],
   styleModifiers: Seq[VisualModifier],
   styleUrl: Seq[String],
   precision: Precision = Precision.Float,
-  viewLayer: Layer = new PipelineNetwork(1),
+  viewLayer: Seq[Int] => Layer = _ => new PipelineNetwork(1),
   override val tileSize: Int = 1200,
   override val tilePadding: Int = 64,
   override val minWidth: Int = 1,
   override val maxWidth: Int = 10000,
   override val maxPixels: Double = 5e8,
   override val magnification: Double = 1.0
-) extends ImageSource(styleUrl) with CartesianNetwork {
+) extends ImageSource(styleUrl) with VisualNetwork {
 
   def apply(canvas: Tensor, content: Tensor = null): Trainable = {
-    val loadedImages = loadImages(CartesianStyleNetwork.pixels(canvas))
+    val loadedImages = loadImages(VisualStyleNetwork.pixels(canvas))
     val grouped = styleLayers.groupBy(_.getPipelineName).mapValues(pipelineLayers => {
       SumInputsLayer.combine(pipelineLayers.filter(x => styleLayers.contains(x)).map(styleModifiers.reduce(_ combine _).build(_, loadedImages: _*)): _*)
     })
     new SumTrainable((grouped.values.toList.map(styleNetwork => {
-      new TiledTrainable(canvas, viewLayer, tileSize, tilePadding, precision) {
+      new TiledTrainable(canvas, viewLayer(canvas.getDimensions()), tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
           regionSelector.freeRef()
-          MultiPrecision.setPrecision(styleNetwork.addRef(), precision).asInstanceOf[PipelineNetwork]
+          MultiPrecision.setPrecision(styleNetwork.addRef(), precision)
         }
       }
     })): _*)
@@ -176,7 +178,7 @@ case class CartesianStyleNetwork
   def withContent(
                    contentLayers: Seq[VisionPipelineLayer],
                    contentModifiers: Seq[VisualModifier] = List(new ContentMatcher)
-                 ) = CartesianStyleContentNetwork(
+                 ) = VisualStyleContentNetwork(
     styleLayers = styleLayers,
     styleModifiers = styleModifiers,
     styleUrl = styleUrl,

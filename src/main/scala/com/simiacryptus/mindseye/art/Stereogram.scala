@@ -54,9 +54,11 @@ object Stereogram_EC2 extends Stereogram with EC2Runner[Object] with AWSNotebook
 
 object Stereogram_Local extends Stereogram with LocalRunner[Object] with NotebookRunner[Object] {
   override def inputTimeoutSeconds = 5
+
+  override def s3bucket: String = ""
 }
 
-class Stereogram extends ArtSetup[Object] with BasicOptimizer {
+abstract class Stereogram extends ArtSetup[Object] with BasicOptimizer {
 
   val seed = "noise200"
   val posterWidth = 1400
@@ -86,8 +88,8 @@ class Stereogram extends ArtSetup[Object] with BasicOptimizer {
     })
 
     for ((name, styleNetwork) <- Map(
-      "cesar-domela-1" -> CartesianStyleNetwork.DOMELA_1,
-      "claude-monet-1" -> CartesianStyleNetwork.MONET_1
+      "cesar-domela-1" -> VisualStyleNetwork.DOMELA_1,
+      "claude-monet-1" -> VisualStyleNetwork.MONET_1
     )) {
       var canvas: Tensor = null
       lazy val depthImg = depthMap(text)
@@ -106,7 +108,7 @@ class Stereogram extends ArtSetup[Object] with BasicOptimizer {
             val canvasDims = canvas.getDimensions
             val viewLayer = new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)
               .setOffsetX(-tiledViewPadding / 2).setOffsetY(-tiledViewPadding / 2)
-            optimize(canvas, styleNetwork.copy(precision = precision, viewLayer = viewLayer).apply(canvas))(sub)
+            optimize(canvas, styleNetwork.copy(precision = precision, viewLayer = _ => viewLayer).apply(canvas))(sub)
           }
           null
         })

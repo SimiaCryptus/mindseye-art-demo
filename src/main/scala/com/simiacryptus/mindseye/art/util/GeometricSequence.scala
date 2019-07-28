@@ -19,16 +19,16 @@
 
 package com.simiacryptus.mindseye.art.util
 
-trait GeometricResolutionSequence {
+trait GeometricSequence {
 
-  def minResolution: Int
+  def min: Double
 
-  def maxResolution: Int
+  def max: Double
 
-  def resolutionSteps: Int
+  def steps: Int
 
-  def resolutions = Stream.iterate(minResolution.toDouble)(_ * growth).takeWhile(_ <= maxResolution).map(_.toInt)
+  def toStream = Stream.iterate(min)(_ * growth).take(steps)
 
-  private def growth = Math.pow(maxResolution.toDouble / minResolution, 1.0 / (resolutionSteps - 1))
+  private def growth = Math.pow(max / min, 1.0 / (steps - 1))
 
 }
