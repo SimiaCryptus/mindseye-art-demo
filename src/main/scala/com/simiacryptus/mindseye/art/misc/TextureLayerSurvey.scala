@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.misc
 
 import java.lang
 import java.util.concurrent.TimeUnit
@@ -27,6 +27,7 @@ import com.simiacryptus.mindseye.art.models.{VGG16, VGG19}
 import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, Plasma, VisionPipelineUtil}
+import com.simiacryptus.mindseye.art.{TiledTrainable, VisionPipeline, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.SumInputsLayer

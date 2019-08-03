@@ -79,18 +79,18 @@ class SingleStylePainting extends ArtSetup[Object] {
 
   override def postConfigure(log: NotebookOutput) = {
     implicit val _log = log
-    log.setArchiveHome(URI.create("s3://" + s3bucket + "/"))
+    log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 1200), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 1200), "Reference Content"))
+    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
+    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndex(canvas)
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport((sub: NotebookOutput) => {
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
-            new VisualStyleNetwork(
+            new VisualStyleContentNetwork(
               styleLayers = List(
                 VGG19_1a,
                 VGG19_1b1,
@@ -113,20 +113,20 @@ class SingleStylePainting extends ArtSetup[Object] {
                 new MomentMatcher()
               ),
               styleUrl = List(styleUrl),
-              magnification = 2
-            ).withContent(List(
-              VGG19_1b2,
-              VGG19_1c2,
-              VGG19_1c4,
-              VGG19_1d2,
-              VGG19_1d4
-            ).flatMap(baseLayer => List(
-              baseLayer,
-              baseLayer.prependAvgPool(2),
-              baseLayer.prependAvgPool(3)
-            )), List(
-              new ContentMatcher().scale(1e0)
-            )) + new VisualStyleNetwork(
+              magnification = 2,
+              contentLayers = List(
+                VGG19_1b2,
+                VGG19_1c2,
+                VGG19_1c4,
+                VGG19_1d2,
+                VGG19_1d4
+              ).flatMap(baseLayer => List(
+                baseLayer,
+                baseLayer.prependAvgPool(2),
+                baseLayer.prependAvgPool(3)
+              )), contentModifiers = List(
+                new ContentMatcher().scale(1e0)
+              )) + new VisualStyleNetwork(
               styleLayers = List(
                 VGG19_0a
               ),
@@ -146,8 +146,8 @@ class SingleStylePainting extends ArtSetup[Object] {
             override val steps = 4
           }.toStream: _*)(sub)
           null
-        })
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        }, UUID.randomUUID().toString)
+        log.subreport((sub: NotebookOutput) => {
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(
               styleLayers = List(
@@ -211,7 +211,7 @@ class SingleStylePainting extends ArtSetup[Object] {
             override val steps = 4
           }.toStream: _*)(sub)
           null
-        })
+        }, UUID.randomUUID().toString)
       }(log)
     } finally {
       registration.foreach(_.stop()(s3client, ec2client))

@@ -47,6 +47,7 @@ trait BasicOptimizer extends Logging {
   def optimize(canvasImage: Tensor, trainable: Trainable)(implicit log: NotebookOutput) = {
     try {
       def currentImage = renderingNetwork(canvasImage.getDimensions).eval(canvasImage).getDataAndFree.getAndFree(0).toRgbImage
+
       val timelineAnimation = new ArrayBuffer[BufferedImage]()
       withMonitoredJpg(() => currentImage) {
         log.subreport("Optimization_" + UUID.randomUUID().toString, (sub: NotebookOutput) => {
@@ -66,7 +67,7 @@ trait BasicOptimizer extends Logging {
                     }
 
                     override def onStepComplete(currentPoint: Step): Unit = {
-                      if(0 < currentPoint.iteration && 0 < logEvery && 0 == currentPoint.iteration % logEvery) {
+                      if (0 < logEvery && 0 == currentPoint.iteration % logEvery) {
                         val image = currentImage
                         timelineAnimation += image
                         sub.p(sub.jpg(image, "Iteration " + currentPoint.iteration))

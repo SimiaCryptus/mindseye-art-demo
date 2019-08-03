@@ -34,15 +34,15 @@ object VisualStyleContentNetwork {
 
 case class VisualStyleContentNetwork
 (
-  styleLayers: Seq[VisionPipelineLayer],
-  styleModifiers: Seq[VisualModifier],
-  contentLayers: Seq[VisionPipelineLayer],
+  styleLayers: Seq[VisionPipelineLayer] = Seq.empty,
+  styleModifiers: Seq[VisualModifier] = Seq.empty,
+  contentLayers: Seq[VisionPipelineLayer] = Seq.empty,
   contentModifiers: Seq[VisualModifier] = List(new ContentMatcher),
-  styleUrl: Seq[String],
+  styleUrl: Seq[String] = Seq.empty,
   precision: Precision = Precision.Float,
   viewLayer: Seq[Int] => Layer = _ => new PipelineNetwork(1),
-  override val tileSize: Int = 400,
-  override val tilePadding: Int = 16,
+  override val tileSize: Int = 1200,
+  override val tilePadding: Int = 64,
   override val minWidth: Int = 1,
   override val maxWidth: Int = 2048,
   override val maxPixels: Double = 5e6,
@@ -51,7 +51,9 @@ case class VisualStyleContentNetwork
 
   def apply(canvas: Tensor, content: Tensor): Trainable = {
     val loadedImages = loadImages(VisualStyleNetwork.pixels(canvas))
-    val styleModifier = styleModifiers.reduce(_ combine _)
+    val styleModifier = styleModifiers.reduceOption(_ combine _).getOrElse(new VisualModifier {
+      override def build(network: PipelineNetwork, image: Tensor*): PipelineNetwork = new PipelineNetwork(1)
+    })
     val contentModifier = contentModifiers.reduce(_ combine _)
     val grouped: Map[String, PipelineNetwork] = ((contentLayers.map(_.getPipelineName -> null) ++ styleLayers.groupBy(_.getPipelineName).toList).groupBy(_._1).mapValues(pipelineLayers => {
       val layers = pipelineLayers.flatMap(x => Option(x._2).toList.flatten)
@@ -63,11 +65,17 @@ case class VisualStyleContentNetwork
       }): _*)
     })).toArray.map(identity).toMap
     loadedImages.foreach(_.freeRef())
+    if (content.getDimensions().toList != canvas.getDimensions.toList) {
+      val msg = s"""${content.getDimensions().toList} != ${canvas.getDimensions.toList}"""
+      throw new IllegalArgumentException(msg)
+    }
+    val resView = viewLayer(content.getDimensions())
+    val contentView = if (prefilterContent) resView.eval(content).getDataAndFree.getAndFree(0) else content
     new SumTrainable(grouped.map(t => {
       val (name, styleNetwork) = t
-      new TiledTrainable(canvas, viewLayer(canvas.getDimensions()), tileSize, tilePadding, precision) {
+      new TiledTrainable(canvas, resView, tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {
-          val selection = regionSelector.eval(content).getDataAndFree.getAndFree(0)
+          val selection = regionSelector.eval(contentView).getDataAndFree.getAndFree(0)
           regionSelector.freeRef()
           MultiPrecision.setPrecision(SumInputsLayer.combine({
             Option(styleNetwork).map(_.addRef()).toList ++ contentLayers.filter(x => x.getPipelineName == name)
@@ -87,5 +95,7 @@ case class VisualStyleContentNetwork
       }
     }).toArray: _*)
   }
+
+  def prefilterContent = false
 
 }

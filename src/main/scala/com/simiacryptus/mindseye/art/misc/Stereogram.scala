@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.misc
 
 import java.awt.image.BufferedImage
 import java.awt.{Font, GraphicsEnvironment}

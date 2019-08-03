@@ -19,7 +19,6 @@
 
 package com.simiacryptus.mindseye.art.util
 
-import java.awt.image.BufferedImage
 import java.io.File
 import java.net.{URI, URLEncoder}
 import java.text.Normalizer
@@ -44,6 +43,7 @@ import com.simiacryptus.util.FastRandom
 import org.apache.commons.io.{FileUtils, IOUtils}
 
 import scala.collection.JavaConversions._
+import scala.concurrent.{ExecutionContext, Future}
 
 object ArtSetup {
   @JsonIgnore
@@ -62,32 +62,45 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
   def s3bucket: String
 
   def registerWithIndex(canvas: Seq[AtomicReference[Tensor]])(implicit log: NotebookOutput) = {
-    if (!s3bucket.isEmpty) Option(new GifRegistration(
-      bucket = s3bucket,
-      reportUrl = "http://" + log.getArchiveHome.getHost + "/" + log.getRoot.getName.replaceAll("//", "/").replaceAll("^/", "") + "/" + log.getName + ".html",
+    val archiveHome = log.getArchiveHome
+    if (!s3bucket.isEmpty && null != archiveHome) Option(new GifRegistration(
+      bucket = s3bucket.split("/").head,
+      reportUrl = "http://" + archiveHome.getHost + "/" + archiveHome.getPath.stripSuffix("/").stripPrefix("/") + "/" + log.getName + ".html",
       liveUrl = s"http://${EC2Util.publicHostname()}:1080/",
-      canvas = () => canvas.map(_.get()).filter(_ != null)
+      canvas = () => {
+        var list = canvas.map(_.get()).filter(_ != null).map(_.toImage)
+        val maxWidth = list.map(_.getWidth).max
+        list = list.map(TestUtil.resize(_, maxWidth, true))
+        (list ++ list.reverse.tail.dropRight(1))
+      }
     ).start()(s3client, ec2client)) else None
   }
 
   def registerWithIndex(canvas: AtomicReference[Tensor])(implicit log: NotebookOutput) = {
-    if (!s3bucket.isEmpty) Option(new JpgRegistration(
-      bucket = s3bucket,
-      reportUrl = "http://" + log.getArchiveHome.getHost + "/" + log.getRoot.getName.replaceAll("//", "/").replaceAll("^/", "") + "/" + log.getName + ".html",
+    val archiveHome = log.getArchiveHome
+    if (!s3bucket.isEmpty && null != archiveHome) Option(new JpgRegistration(
+      bucket = s3bucket.split("/").head,
+      reportUrl = "http://" + archiveHome.getHost + "/" + archiveHome.getPath.stripSuffix("/").stripPrefix("/") + "/" + log.getName + ".html",
       liveUrl = s"http://${EC2Util.publicHostname()}:1080/",
       canvas = () => canvas.get()
     ).start()(s3client, ec2client)) else None
   }
 
-  def upload(log: NotebookOutput) = {
+  def upload(log: NotebookOutput)(implicit executionContext: ExecutionContext = ExecutionContext.global) = {
     log.write()
-    if (!s3bucket.isEmpty) {
-      S3Util.upload(s3client, log.getArchiveHome, log.getRoot)
+    for (home <- Option(log.getArchiveHome).filter(!_.toString.isEmpty)) {
+      Future {
+        S3Util.upload(s3client, home, log.getRoot)
+      }
     }
   }
 
   def getPaintingsBySearch(searchWord: String, minWidth: Int): Array[String] = {
     getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth, 100)
+  }
+
+  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
+    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
   }
 
   def getPaintings(uri: URI, minWidth: Int, maxResults: Int): Array[String] = {
@@ -117,15 +130,11 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
       }).filterNot(_.isEmpty).toArray
   }
 
-  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
-  }
-
   def paintBisection(contentUrl: String, initUrl: String, canvases: Seq[AtomicReference[Tensor]], networks: Seq[(String, VisualNetwork)], optimizer: BasicOptimizer, renderingFn: Seq[Int] => PipelineNetwork, chunks: Int, resolutions: Double*)(implicit sub: NotebookOutput) = {
     paint(contentUrl, initUrl, canvases, networks, optimizer, resolutions, toBisectionChunks(0 until networks.size, chunks), renderingFn)
   }
 
-  def toBisectionChunks(seq: Seq[Int], chunks:Int=1): Seq[Int] = {
+  def toBisectionChunks(seq: Seq[Int], chunks: Int = 1): Seq[Int] = {
     def middleFirst(seq: Seq[Int]): Seq[Int] = {
       if (seq.isEmpty) seq
       else {
@@ -134,10 +143,11 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
         seq.drop(leftNum).dropRight(rightNum) ++ middleFirst(seq.take(leftNum)) ++ middleFirst(seq.takeRight(rightNum))
       }
     }
-    if (seq.size<3) seq
+
+    if (seq.size < 3) seq
     else {
-      val thisChunk = ((seq.size - (chunks+1))/chunks).ceil.toInt
-      seq.take(1) ++ toBisectionChunks(seq.drop(1+thisChunk),chunks-1) ++ middleFirst(seq.drop(1).take(thisChunk))
+      val thisChunk = ((seq.size - (chunks + 1)) / chunks).ceil.toInt
+      seq.take(1) ++ toBisectionChunks(seq.drop(1 + thisChunk), chunks - 1) ++ middleFirst(seq.drop(1).take(thisChunk))
     }
   }
 
@@ -161,10 +171,10 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
           val content = VisionPipelineUtil.load(contentUrl, res.toInt)
           if (null == canvas.get) {
             implicit val nullNotebookOutput = new NullNotebookOutput()
-            val l = canvases.zipWithIndex.take(i).filter(_._1.get() != null).lastOption.map(_._1.get())
-            val r = canvases.zipWithIndex.reverse.take(i).filter(_._1.get() != null).lastOption.map(_._1.get())
-            if (l.isDefined && r.isDefined) {
-              canvas.set(l.get.add(r.get).scaleInPlace(0.5))
+            val l = canvases.zipWithIndex.take(i).filter(_._1.get() != null).lastOption
+            val r = canvases.zipWithIndex.drop(i + 1).reverse.filter(_._1.get() != null).lastOption
+            if (l.isDefined && r.isDefined && l.get._2 != r.get._2) {
+              canvas.set(l.get._1.get().add(r.get._1.get()).scaleInPlace(0.5))
             } else {
               canvas.set(load(Tensor.fromRGB(content), initUrl))
             }
@@ -185,23 +195,26 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
       CudaSettings.INSTANCE().defaultPrecision = network.precision
       sub.h1("Resolution " + res)
       var content = VisionPipelineUtil.load(contentUrl, res.toInt)
-
-      def default = new Tensor(res.toInt, res.toInt, 3).mapAndFree((x: Double) => FastRandom.INSTANCE.random())
-
-      var contentTensor = if (null == content) default else Tensor.fromRGB(content)
+      val contentTensor = if (null == content) {
+        new Tensor(res.toInt, res.toInt, 3).mapAndFree((x: Double) => FastRandom.INSTANCE.random())
+      } else {
+        Tensor.fromRGB(content)
+      }
       if (null == content) content = contentTensor.toImage
       require(null != canvas)
-      var currentCanvas = canvas.get
-      if (null == currentCanvas) {
-        currentCanvas = load(contentTensor, initUrl)
-        canvas.set(currentCanvas)
-      } else {
-        val width = if (null == content) res.toInt else content.getWidth
-        val height = if (null == content) res.toInt else content.getHeight
-        val image = TestUtil.resize(currentCanvas.toRgbImage, width, height)
-        val tensor = Tensor.fromRGB(image)
-        canvas.set(tensor)
+
+      def updateCanvas(currentCanvas: Tensor) = {
+        if (null == currentCanvas) {
+          load(contentTensor, initUrl)
+        } else {
+          val width = if (null == content) res.toInt else content.getWidth
+          val height = if (null == content) res.toInt else content.getHeight
+          Tensor.fromRGB(TestUtil.resize(currentCanvas.toRgbImage, width, height))
+        }
       }
+
+      val currentCanvas: Tensor = updateCanvas(canvas.get())
+      canvas.set(currentCanvas)
       val trainable = network.apply(currentCanvas, contentTensor)
       ArtUtil.resetPrecision(trainable, network.precision)
       optimizer.optimize(currentCanvas, trainable)

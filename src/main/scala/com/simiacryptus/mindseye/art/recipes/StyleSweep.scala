@@ -33,17 +33,16 @@ import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.CudaMemory
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.notebook.NotebookOutput
-import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredGif
 import com.simiacryptus.sparkbook._
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
 import scala.collection.immutable
 
-object StyleAnimationEC2 extends StyleAnimation with EC2Runner[Object] with AWSNotebookRunner[Object] {
-  override val styleUrl: String = "s3://simiacryptus/photos/shutterstock_240121861.jpg"
-  override val contentUrl: String = "s3://simiacryptus/photos/IMG_20181107_171439630_crop.jpg"
-  //override val initUrl: String = contentUrl
+object StyleSweepEC2 extends StyleSweep with EC2Runner[Object] with AWSNotebookRunner[Object] {
+  override val styleUrl: String = "s3://simiacryptus/photos/shutterstock_468243743.jpg"
+  override val contentUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
+  override val initUrl: String = contentUrl
   override val s3bucket = "www.tigglegickle.com"
 
   override def nodeSettings: EC2NodeSettings = EC2NodeSettings.P3_2XL
@@ -59,26 +58,26 @@ object StyleAnimationEC2 extends StyleAnimation with EC2Runner[Object] with AWSN
 
 }
 
-object StyleAnimation extends StyleAnimation with LocalRunner[Object] with NotebookRunner[Object]
+object StyleSweep extends StyleSweep with LocalRunner[Object] with NotebookRunner[Object]
 
-class StyleAnimation extends ArtSetup[Object] {
+class StyleSweep extends ArtSetup[Object] {
   val contentUrl =
-  //    "file:///C:/Users/andre/Downloads/IMG_20170507_162514668.jpg" // Road to city
-  //      "file:///C:/Users/andre/Downloads/pictures/E2-E.jpg" // Daddys girl
-    "file:///C:/Users/andre/Downloads/pictures/IMG_20181107_171439630_crop.jpg" // Boy portrait
+    "file:///C:/Users/andre/Downloads/IMG_20170507_162514668.jpg" // Road to city
+  //    "file:///C:/Users/andre/Downloads/pictures/E2-E.jpg" // Daddys girl
+  //    "file:///C:/Users/andre/Downloads/pictures/IMG_20181107_171439630_crop.jpg" // Boy portrait
   //    "file:///C:/Users/andre/Downloads/img11262015_0645_2.jpg" // Kids by the lake
 
   val styleUrl =
-  //    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
-  //      "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
-    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
+    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
+  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
+  //    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_1060865300.jpg" // Plasma Ball
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_468243743.jpg" // Leaves
 
-  val initUrl: String = "50+noise50" //contentUrl
+  val initUrl: String = contentUrl
   val s3bucket: String = ""
-  val transitions = 2
+  val numSteps = 5
 
   override def inputTimeoutSeconds = 5
 
@@ -92,10 +91,14 @@ class StyleAnimation extends ArtSetup[Object] {
     val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
     val registration = registerWithIndex(canvases)
     try {
-      withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
+      NotebookRunner.withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
           paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
-            (1 to numSteps).map(step => s"step $step" -> {
+            new GeometricSequence {
+              override val min = 1e-1
+              override val max = 1e1
+              override val steps = numSteps
+            }.toStream.map(contentCoeff => f"contentCoeff = $contentCoeff%.3e" -> {
               new VisualStyleNetwork(
                 styleLayers = List(
                   VGG19_1a,
@@ -131,14 +134,14 @@ class StyleAnimation extends ArtSetup[Object] {
                 baseLayer.prependAvgPool(2),
                 baseLayer.prependAvgPool(3)
               )), List(
-                new ContentMatcher().scale(1e0)
+                new ContentMatcher().scale(contentCoeff)
               ))
             })
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 90
             override val trainingIterations: Int = 20
             override val maxRate = 1e9
-          }, _ => new PipelineNetwork(1), transitions, new GeometricSequence {
+          }, _ => new PipelineNetwork(1), 1, new GeometricSequence {
             override val min: Double = 400
             override val max: Double = 1024
             override val steps = 3
@@ -149,9 +152,10 @@ class StyleAnimation extends ArtSetup[Object] {
     } finally {
       registration.foreach(_.stop()(s3client, ec2client))
     }
+
   }
 
-  def numSteps = transitions * 2 + 1
+
 }
 
 

@@ -73,10 +73,10 @@ class SingleStyleTexture extends ArtSetup[Object] {
 
   override def postConfigure(log: NotebookOutput) = {
     implicit val _log = log
-    log.setArchiveHome(URI.create("s3://" + s3bucket + "/"))
+    log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 1200), "Input Style"))
+    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndex(canvas)
     try {

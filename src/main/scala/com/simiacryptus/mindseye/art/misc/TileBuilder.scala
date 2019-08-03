@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package com.simiacryptus.mindseye.art
+package com.simiacryptus.mindseye.art.misc
 
 import java.awt.image.BufferedImage
 import java.lang
@@ -30,6 +30,7 @@ import com.simiacryptus.mindseye.art.models.VGG16._
 import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
 import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
+import com.simiacryptus.mindseye.art.{SumTrainable, TiledTrainable, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, LayerBase, Tensor}
 import com.simiacryptus.mindseye.layers.ValueLayer
@@ -357,19 +358,19 @@ abstract class TileBuilder extends ArtSetup[Object] {
     selectRegion(img, positionX, positionY, width, height)
   }
 
+  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
+    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
+    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
+    tileSelectLayer.freeRef()
+    result
+  }
+
   def selectTop(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = 0
     val width = img.getWidth
     val height = size
     selectRegion(img, positionX, positionY, width, height)
-  }
-
-  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
-    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
-    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
-    tileSelectLayer.freeRef()
-    result
   }
 
   def selectLeft(img: BufferedImage, size: Int) = {

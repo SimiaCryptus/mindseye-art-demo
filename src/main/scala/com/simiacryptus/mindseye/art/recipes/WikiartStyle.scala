@@ -57,7 +57,7 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
   override def inputTimeoutSeconds = 5
 
   override def postConfigure(log: NotebookOutput) = {
-    log.setArchiveHome(URI.create("s3://" + s3bucket + "/"))
+    log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, -1), "Reference Content"))

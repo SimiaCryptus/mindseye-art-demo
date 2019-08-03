@@ -62,33 +62,33 @@ object RotorAnimation extends RotorAnimation with LocalRunner[Object] with Noteb
 
 class RotorAnimation extends RotorArt {
 
+  override val rotationalSegments: Int = 3
   val styleUrl =
-    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
-  //    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
-  //    "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_1060865300.jpg" // Plasma Ball
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_468243743.jpg" // Leaves
-
+  //    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
+  //      "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
+  //      "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
+  //      "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
+    "file:///C:/Users/andre/Downloads/pictures/shutterstock_468243743.jpg" // Leaves
   val initUrl: String = "50+noise50"
-  val s3bucket: String = ""
-  val numSteps = 5
+  val s3bucket: String = "www.tigglegickle.com"
+  val transitions = 4
 
   override def inputTimeoutSeconds = 5
 
   override def postConfigure(log: NotebookOutput) = {
     implicit val _log = log
-    log.setArchiveHome(URI.create("s3://" + s3bucket + "/"))
+    log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 800), "Input Style"))
-    val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
+    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
+    val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to (transitions * 2 + 1)).map(_ => new AtomicReference[Tensor](null)).toList
     val registration = registerWithIndex(canvases)
     try {
       val renderingFn: Seq[Int] => PipelineNetwork = dims => {
         getKaleidoscope(dims.toArray).copyPipeline()
       }
       val calcFn: Seq[Int] => PipelineNetwork = dims => {
-        val padding = Math.max(16, dims(0) / 4)
+        val padding = Math.min(256, Math.max(16, dims(0) / 2))
         val viewLayer = renderingFn(dims).copyPipeline()
         viewLayer.wrap(new ImgViewLayer(dims(0) + padding, dims(1) + padding, true)
           .setOffsetX(-padding / 2).setOffsetY(-padding / 2)).freeRef()
@@ -101,47 +101,47 @@ class RotorAnimation extends RotorArt {
       }) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
           paintBisection("", initUrl, canvases, sub.eval(() => {
-                      (1 to numSteps).map(step => f"step = $step%d" -> {
-                        new VisualStyleNetwork(
-                          styleLayers = List(
-                            VGG19_1a,
-                            VGG19_1b1,
-                            VGG19_1b2,
-                            VGG19_1c1,
-                            VGG19_1c2,
-                            VGG19_1c3,
-                            VGG19_1c4,
-                            VGG19_1d1,
-                            VGG19_1d2,
-                            VGG19_1d3,
-                            VGG19_1d4
-                          ).flatMap(baseLayer => List(
-                            baseLayer,
-                            baseLayer.prependAvgPool(2),
-                            baseLayer.prependAvgPool(3)
-                          )),
-                          styleModifiers = List(
-                            new GramMatrixEnhancer(),
-                            new MomentMatcher()
-                          ),
-                          styleUrl = List(styleUrl),
-                          magnification = 8,
-                          viewLayer = calcFn
-                        )
-                      })
-                    }), new BasicOptimizer {
-                      override val trainingMinutes: Int = 60
-                      override val trainingIterations: Int = 25
-                      override val maxRate = 1e9
+            (1 to (transitions * 2 + 1)).map(step => f"step = $step%d" -> {
+              new VisualStyleNetwork(
+                styleLayers = List(
+                  VGG19_1a,
+                  VGG19_1b1,
+                  VGG19_1b2,
+                  VGG19_1c1,
+                  VGG19_1c2,
+                  VGG19_1c3,
+                  VGG19_1c4,
+                  VGG19_1d1,
+                  VGG19_1d2,
+                  VGG19_1d3,
+                  VGG19_1d4
+                ).flatMap(baseLayer => List(
+                  baseLayer,
+                  baseLayer.prependAvgPool(2),
+                  baseLayer.prependAvgPool(3)
+                )),
+                styleModifiers = List(
+                  new GramMatrixEnhancer(),
+                  new MomentMatcher()
+                ),
+                styleUrl = List(styleUrl),
+                magnification = 8,
+                viewLayer = calcFn
+              )
+            })
+          }), new BasicOptimizer {
+            override val trainingMinutes: Int = 60
+            override val trainingIterations: Int = 30
+            override val maxRate = 1e9
 
-                      override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
+            override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
 
-                      override def trustRegion(layer: Layer): RangeConstraint = null
-                    }, renderingFn, 2, new GeometricSequence {
-                      override val min: Double = 280
-                      override val max: Double = 800
-                      override val steps = 3
-                    }.toStream: _*)(sub)
+            override def trustRegion(layer: Layer): RangeConstraint = null
+          }, renderingFn, transitions, new GeometricSequence {
+            override val min: Double = 240
+            override val max: Double = 780
+            override val steps = 2
+          }.toStream: _*)(sub)
           null
         })
       }(log)

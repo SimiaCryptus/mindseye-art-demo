@@ -147,9 +147,9 @@ object VisualStyleNetwork {
 
 case class VisualStyleNetwork
 (
-  styleLayers: Seq[VisionPipelineLayer],
-  styleModifiers: Seq[VisualModifier],
-  styleUrl: Seq[String],
+  styleLayers: Seq[VisionPipelineLayer] = Seq.empty,
+  styleModifiers: Seq[VisualModifier] = Seq.empty,
+  styleUrl: Seq[String] = Seq.empty,
   precision: Precision = Precision.Float,
   viewLayer: Seq[Int] => Layer = _ => new PipelineNetwork(1),
   override val tileSize: Int = 1200,

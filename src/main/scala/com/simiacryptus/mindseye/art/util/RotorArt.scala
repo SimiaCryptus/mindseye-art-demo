@@ -23,7 +23,7 @@ import com.simiacryptus.mindseye.layers.java.{BoundedActivationLayer, ImgViewLay
 import com.simiacryptus.mindseye.network.PipelineNetwork
 
 abstract class RotorArt extends ArtSetup[Object] {
-  lazy val rotationalChannelPermutation = Permutation.roots(3, rotationalSegments).head.indices
+  lazy val rotationalChannelPermutation: Array[Int] = Permutation.roots(3, rotationalSegments).head.indices
   val rotationalSegments = 3
 
   def getKaleidoscope(canvasDims: Array[Int]) = {

@@ -19,13 +19,13 @@
 
 package com.simiacryptus.mindseye.art.registry
 
+import java.awt.image.BufferedImage
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.util.UUID
 
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.services.s3.model.{CannedAccessControlList, ObjectMetadata, PutObjectRequest}
 import com.simiacryptus.aws.EC2Util
-import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.sparkbook.NotebookRunner
 
 class GifRegistration
@@ -33,19 +33,19 @@ class GifRegistration
   bucket: String,
   reportUrl: String,
   liveUrl: String,
-  canvas: () => Seq[Tensor],
+  canvas: () => Seq[BufferedImage],
   instances: List[String] = List(
     EC2Util.instanceId()
   ).filterNot(_.isEmpty),
   id: String = UUID.randomUUID().toString
-) extends JobRegistration[Seq[Tensor]](bucket, reportUrl, liveUrl, canvas, instances, id) {
+) extends JobRegistration[Seq[BufferedImage]](bucket, reportUrl, liveUrl, canvas, instances, id) {
 
-  def uploadImage(canvas: Seq[Tensor])(implicit s3client: AmazonS3) = {
+  def uploadImage(canvas: Seq[BufferedImage])(implicit s3client: AmazonS3) = {
     val key = s"img/$id.gif"
     logger.info("Writing " + key)
     val metadata = new ObjectMetadata()
     val stream = new ByteArrayOutputStream()
-    NotebookRunner.toGif(stream, canvas.map(_.toImage))
+    NotebookRunner.toGif(stream, canvas)
     metadata.setContentType("image/gif")
     s3client.putObject(new PutObjectRequest(bucket, key, new ByteArrayInputStream(stream.toByteArray), metadata)
       .withCannedAcl(CannedAccessControlList.PublicRead))
