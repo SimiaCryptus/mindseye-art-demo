@@ -78,7 +78,7 @@ class SingleStyleTexture extends ArtSetup[Object] {
 
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     val canvas = new AtomicReference[Tensor](null)
-    val registration = registerWithIndex(canvas)
+    val registration = registerWithIndexJPG(canvas.get())
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {

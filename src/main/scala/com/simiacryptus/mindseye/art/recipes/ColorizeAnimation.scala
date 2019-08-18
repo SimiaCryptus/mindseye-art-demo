@@ -63,7 +63,8 @@ object ColorizeAnimation extends ColorizeAnimation with LocalRunner[Object] with
 
 class ColorizeAnimation extends ArtSetup[Object] {
   val contentUrl =
-    "file:///C:/Users/andre/Downloads/pictures/39617283601_898baced34_o.jpg"
+  //    "file:///C:/Users/andre/Downloads/pictures/39617283601_898baced34_o.jpg" // Escher space fill
+    "file:///C:/Users/andre/Downloads/pictures/21815378580_a9e497d65b_o.jpg" // Escher staircase room
   //    "file:///C:/Users/andre/Downloads/IMG_20170507_162514668.jpg" // Road to city
   //    "file:///C:/Users/andre/Downloads/pictures/E2-E.jpg" // Daddys girl
   //    "file:///C:/Users/andre/Downloads/pictures/IMG_20181107_171439630_crop.jpg" // Boy portrait
@@ -71,7 +72,8 @@ class ColorizeAnimation extends ArtSetup[Object] {
 
   val styleUrl =
   //    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
-    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
+    "https://upload.wikimedia.org/wikipedia/commons/3/34/Camp_fire.jpg"
+  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
   //    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_1060865300.jpg" // Plasma Ball
@@ -80,12 +82,12 @@ class ColorizeAnimation extends ArtSetup[Object] {
   val initUrl: String =
     "50+noise50"
   //    contentUrl
-  val transitions = 2
+
+  val transitions = 3
   val s3bucket: String =
     "www.tigglegickle.com"
 
   override def inputTimeoutSeconds = 5
-  //    ""
 
   override def postConfigure(log: NotebookOutput) = {
     implicit val _log = log
@@ -94,7 +96,7 @@ class ColorizeAnimation extends ArtSetup[Object] {
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvases = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
-    val registration = registerWithIndex(canvases)
+    val registration = registerWithIndexGIF(canvases.map(_.get()))
     try {
       lazy val decolorModel: Layer = {
         val layer = new ConvolutionLayer(1, 1, 3, 1)
@@ -131,17 +133,27 @@ class ColorizeAnimation extends ArtSetup[Object] {
             (1 to numSteps).map(step => s"step $step" -> {
               new VisualStyleNetwork(
                 styleLayers = List(
+                  VGG19_0a
+                ),
+                styleModifiers = List(
+                  //                new GramMatrixEnhancer(),
+                  new MomentMatcher()
+                ).map(_.scale(1e3)),
+                styleUrl = List(styleUrl),
+                magnification = 2
+              ) + new VisualStyleNetwork(
+                styleLayers = List(
                   VGG19_1a,
                   VGG19_1b1,
                   VGG19_1b2,
                   VGG19_1c1,
                   VGG19_1c2,
                   VGG19_1c3,
-                  VGG19_1c4,
-                  VGG19_1d1,
-                  VGG19_1d2,
-                  VGG19_1d3,
-                  VGG19_1d4
+                  VGG19_1c4
+                  //                VGG19_1d1,
+                  //                VGG19_1d2,
+                  //                VGG19_1d3,
+                  //                VGG19_1d4
                 ).flatMap(baseLayer => List(
                   baseLayer,
                   baseLayer.prependAvgPool(2),
@@ -156,13 +168,22 @@ class ColorizeAnimation extends ArtSetup[Object] {
               ) + new VisualStyleContentNetwork(
                 contentLayers = List(
                   VGG19_0a,
-                  VGG19_0b,
-                  //                  VGG19_1a,
-                  //                  VGG19_1b1,
-                  VGG19_1b2
-                ).flatMap(baseLayer => List(
-                  baseLayer
-                )), contentModifiers = List(
+                  //                VGG19_0b
+                  //                VGG19_1a
+                  VGG19_1b1
+                  //                VGG19_1b2
+                  //                VGG19_1c1,
+                  //                VGG19_1c2,
+                  //                VGG19_1c3,
+                  //                VGG19_1c4,
+                  //                VGG19_1d1,
+                  //                VGG19_1d2,
+                  //                VGG19_1d3,
+                  //                VGG19_1d4
+                  //              ).flatMap(baseLayer => List(
+                  //                baseLayer
+                  //              )
+                ), contentModifiers = List(
                   new ContentMatcher().scale(1e2)
                 ),
                 viewLayer = networkFn

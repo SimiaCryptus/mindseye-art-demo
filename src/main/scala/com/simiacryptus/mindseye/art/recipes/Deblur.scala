@@ -87,7 +87,7 @@ class Deblur extends ArtSetup[Object] {
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
-    val registration = registerWithIndex(canvas)
+    val registration = registerWithIndexJPG(canvas.get())
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {

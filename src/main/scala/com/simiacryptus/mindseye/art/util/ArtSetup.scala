@@ -30,7 +30,7 @@ import com.amazonaws.services.s3.{AmazonS3, AmazonS3ClientBuilder}
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.google.gson.GsonBuilder
 import com.simiacryptus.aws.{EC2Util, S3Util}
-import com.simiacryptus.mindseye.art.registry.{GifRegistration, JpgRegistration}
+import com.simiacryptus.mindseye.art.registry.{GifRegistration, JobRegistration, JpgRegistration}
 import com.simiacryptus.mindseye.art.util.ArtUtil.{cyclicalAnimation, load}
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.lang.cudnn.CudaSettings
@@ -61,14 +61,14 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
 
   def s3bucket: String
 
-  def registerWithIndex(canvas: Seq[AtomicReference[Tensor]])(implicit log: NotebookOutput) = {
+  def registerWithIndexGIF(canvas: => Seq[Tensor])(implicit log: NotebookOutput) = {
     val archiveHome = log.getArchiveHome
     if (!s3bucket.isEmpty && null != archiveHome) Option(new GifRegistration(
       bucket = s3bucket.split("/").head,
       reportUrl = "http://" + archiveHome.getHost + "/" + archiveHome.getPath.stripSuffix("/").stripPrefix("/") + "/" + log.getName + ".html",
       liveUrl = s"http://${EC2Util.publicHostname()}:1080/",
       canvas = () => {
-        var list = canvas.map(_.get()).filter(_ != null).map(_.toImage)
+        var list = canvas.filter(_ != null).map(_.toImage)
         val maxWidth = list.map(_.getWidth).max
         list = list.map(TestUtil.resize(_, maxWidth, true))
         (list ++ list.reverse.tail.dropRight(1))
@@ -76,13 +76,13 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
     ).start()(s3client, ec2client)) else None
   }
 
-  def registerWithIndex(canvas: AtomicReference[Tensor])(implicit log: NotebookOutput) = {
+  def registerWithIndexJPG(canvas: => Tensor)(implicit log: NotebookOutput): Option[JobRegistration[Tensor]] = {
     val archiveHome = log.getArchiveHome
     if (!s3bucket.isEmpty && null != archiveHome) Option(new JpgRegistration(
       bucket = s3bucket.split("/").head,
       reportUrl = "http://" + archiveHome.getHost + "/" + archiveHome.getPath.stripSuffix("/").stripPrefix("/") + "/" + log.getName + ".html",
       liveUrl = s"http://${EC2Util.publicHostname()}:1080/",
-      canvas = () => canvas.get()
+      canvas = () => canvas
     ).start()(s3client, ec2client)) else None
   }
 
@@ -97,10 +97,6 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
 
   def getPaintingsBySearch(searchWord: String, minWidth: Int): Array[String] = {
     getPaintings(new URI("https://www.wikiart.org/en/search/" + URLEncoder.encode(searchWord, "UTF-8").replaceAllLiterally("+", "%20") + "/1?json=2"), minWidth, 100)
-  }
-
-  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
-    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
   }
 
   def getPaintings(uri: URI, minWidth: Int, maxResults: Int): Array[String] = {
@@ -128,6 +124,10 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
             ""
         }
       }).filterNot(_.isEmpty).toArray
+  }
+
+  def getPaintingsByArtist(artist: String, minWidth: Int): Array[String] = {
+    getPaintings(new URI("https://www.wikiart.org/en/App/Painting/PaintingsByArtist?artistUrl=" + artist), minWidth, 100)
   }
 
   def paintBisection(contentUrl: String, initUrl: String, canvases: Seq[AtomicReference[Tensor]], networks: Seq[(String, VisualNetwork)], optimizer: BasicOptimizer, renderingFn: Seq[Int] => PipelineNetwork, chunks: Int, resolutions: Double*)(implicit sub: NotebookOutput) = {
@@ -191,6 +191,10 @@ trait ArtSetup[T <: AnyRef] extends InteractiveSetup[T] {
   }
 
   def paint(contentUrl: String, initUrl: String, canvas: AtomicReference[Tensor], network: VisualNetwork, optimizer: BasicOptimizer, resolutions: Double*)(implicit sub: NotebookOutput): Unit = {
+    paint(contentUrl, initUrl, canvas, network, optimizer, resolutions)
+  }
+
+  def paint(contentUrl: String, initUrl: String, canvas: AtomicReference[Tensor], network: VisualNetwork, optimizer: BasicOptimizer, resolutions: Seq[Double], renderingFn: Seq[Int] => PipelineNetwork = x => new PipelineNetwork(1))(implicit sub: NotebookOutput): Unit = {
     for (res <- resolutions) {
       CudaSettings.INSTANCE().defaultPrecision = network.precision
       sub.h1("Resolution " + res)

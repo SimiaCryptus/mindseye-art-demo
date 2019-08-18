@@ -63,11 +63,6 @@ abstract class JobRegistration[T]
 
   def periodMinutes = 5
 
-  def stop()(implicit s3client: AmazonS3, ec2client: AmazonEC2) = {
-    update()
-    close()
-  }
-
   def update()(implicit s3client: AmazonS3, ec2client: AmazonEC2) = {
     upload()
     rebuildIndex()
@@ -100,6 +95,11 @@ abstract class JobRegistration[T]
          |$bodyHtml
          |</body></html>""".stripMargin.getBytes
     ), metadata).withCannedAcl(CannedAccessControlList.PublicRead))
+  }
+
+  def stop()(implicit s3client: AmazonS3, ec2client: AmazonEC2) = {
+    update()
+    close()
   }
 
   override def close(): Unit = {

@@ -79,7 +79,7 @@ class RotorTexture extends RotorArt {
     log.onComplete(() => upload(log): Unit)
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     val canvas = new AtomicReference[Tensor](null)
-    val registration = registerWithIndex(canvas)
+    val registration = registerWithIndexJPG(canvas.get())
     try {
       def renderingFn(dims: Seq[Int]): PipelineNetwork = {
         val padding = Math.max(16, dims(0) / 4)

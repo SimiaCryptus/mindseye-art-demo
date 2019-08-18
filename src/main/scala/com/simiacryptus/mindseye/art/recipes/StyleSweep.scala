@@ -89,7 +89,7 @@ class StyleSweep extends ArtSetup[Object] {
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
-    val registration = registerWithIndex(canvases)
+    val registration = registerWithIndexGIF(canvases.map(_.get()))
     try {
       NotebookRunner.withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {

@@ -38,9 +38,8 @@ import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
 object RotorStylePaintingEC2 extends RotorStylePainting with EC2Runner[Object] with AWSNotebookRunner[Object] {
-  override val styleUrl: String = "s3://simiacryptus/photos/shutterstock_468243743.jpg"
-  override val contentUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
-  //override val initUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
+  override val styleUrl: String = "s3://simiacryptus/photos/vangogh-starry-night-ballance1.jpg"
+  override val contentUrl: String = "s3://simiacryptus/photos/40fe5e10-1448-45f8-89ae-90ffacb30b7d.jpeg"
   override val s3bucket = "www.tigglegickle.com"
 
   override def nodeSettings: EC2NodeSettings = EC2NodeSettings.P3_2XL
@@ -59,19 +58,21 @@ object RotorStylePaintingEC2 extends RotorStylePainting with EC2Runner[Object] w
 object RotorStylePainting extends RotorStylePainting with LocalRunner[Object] with NotebookRunner[Object]
 
 class RotorStylePainting extends RotorArt {
-  override lazy val rotationalChannelPermutation: Array[Int] = Array(-1, -2, -3)
-  override val rotationalSegments: Int = 2
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
+  //  override lazy val rotationalChannelPermutation: Array[Int] = Array(-3, -1, -2)
+  override lazy val rotationalChannelPermutation: Array[Int] = Array(1, 2, 3)
+  override val rotationalSegments: Int = 6
+  val contentUrl =
+    "file:///C:/Users/andre/Downloads/pictures/40fe5e10-1448-45f8-89ae-90ffacb30b7d.jpeg"
   //    "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_1060865300.jpg" // Plasma Ball
   //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_468243743.jpg" // Leaves
-  val contentUrl =
-    "file:///C:/Users/andre/Downloads/pictures/shutterstock_248374732_centered.jpg" // Earth
+  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_248374732_centered.jpg" // Earth
   val styleUrl =
-  //    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
-    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
+  //    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
+  "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
+  //  "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
   val initUrl: String = "50+noise50"
-  val s3bucket: String = ""
+  val s3bucket: String = "www.tigglegickle.com"
 
   override def inputTimeoutSeconds = 30
 
@@ -83,11 +84,14 @@ class RotorStylePainting extends RotorArt {
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
-    val registration = registerWithIndex(canvas)
+    val renderingFn: Seq[Int] => PipelineNetwork = dims => {
+      getKaleidoscope(dims.toArray).copyPipeline()
+    }
+    val registration = registerWithIndexJPG({
+      val tensor = canvas.get()
+      renderingFn(tensor.getDimensions).eval(tensor).getDataAndFree.getAndFree(0)
+    })
     try {
-      val renderingFn: Seq[Int] => PipelineNetwork = dims => {
-        getKaleidoscope(dims.toArray).copyPipeline()
-      }
       withMonitoredJpg(() => Option(canvas.get()).map(tensor => {
         renderingFn(tensor.getDimensions).eval(tensor).getDataAndFree.getAndFree(0).toRgbImage
       }).orNull) {
@@ -95,7 +99,7 @@ class RotorStylePainting extends RotorArt {
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleContentNetwork(
               styleLayers = List(
-                VGG19_1a,
+                //                VGG19_1a,
                 VGG19_1b1,
                 VGG19_1b2,
                 VGG19_1c1,
@@ -108,9 +112,10 @@ class RotorStylePainting extends RotorArt {
                 VGG19_1d4
               ).flatMap(baseLayer => List(
                 baseLayer,
-                baseLayer.prependAvgPool(2),
-                baseLayer.prependAvgPool(3)
-              )),
+                baseLayer.prependAvgPool(2)
+                //                baseLayer.prependAvgPool(3)
+              )
+              ),
               styleModifiers = List(
                 new GramMatrixEnhancer(),
                 new MomentMatcher()
@@ -118,41 +123,46 @@ class RotorStylePainting extends RotorArt {
               styleUrl = List(styleUrl),
               magnification = 8,
               contentLayers = List(
-                VGG19_1b2,
+                //                VGG19_1b2,
                 VGG19_1c2,
                 VGG19_1c4,
-                VGG19_1d2,
-                VGG19_1d4
+                VGG19_1d2
+                //                VGG19_1d4
               ).flatMap(baseLayer => List(
                 baseLayer,
-                baseLayer.prependAvgPool(2),
-                baseLayer.prependAvgPool(3)
-              )).flatMap(baseLayer => List(
+                baseLayer.prependAvgPool(2)
+                //                baseLayer.prependAvgPool(3)
+              )
+              ).flatMap(baseLayer => List(
                 baseLayer.appendMaxPool(2)
-              )), contentModifiers = List(
-                new ContentMatcher().scale(1e1)
-              )) + new VisualStyleNetwork(
-              styleLayers = List(
-                VGG19_0a
+              )
+              ), contentModifiers = List(
+                new ContentMatcher().scale(5e0)
               ),
-              styleModifiers = List(
-                new MomentMatcher()
-              ).map(_.scale(1e2)),
-              styleUrl = List(contentUrl),
-              magnification = 1,
               viewLayer = renderingFn
+              //            ) + new VisualStyleNetwork(
+              //              styleLayers = List(
+              //                VGG19_0a
+              //              ),
+              //              styleModifiers = List(
+              //                new MomentMatcher()
+              //              ).map(_.scale(1e0)),
+              //              styleUrl = List(contentUrl),
+              //              magnification = 1,
+              //              viewLayer = renderingFn
             )
-          }), new BasicOptimizer {
-            override val trainingMinutes: Int = 90
-            override val trainingIterations: Int = 30
-            override val maxRate = 1e9
+          })
+            , new BasicOptimizer {
+              override val trainingMinutes: Int = 90
+              override val trainingIterations: Int = 30
+              override val maxRate = 1e9
 
-            override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
-          }, new GeometricSequence {
-            override val min: Double = 200
-            override val max: Double = 1800
-            override val steps = 5
-          }.toStream: _*)(sub)
+              override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
+            }, new GeometricSequence {
+              override val min: Double = 200
+              override val max: Double = 1800
+              override val steps = 5
+            }.toStream, renderingFn = renderingFn)(sub)
           null
         })
       }(log)

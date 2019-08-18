@@ -24,13 +24,14 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.models.VGG19._
+import com.simiacryptus.mindseye.art.models.VGG19.{VGG19_1a, _}
 import com.simiacryptus.mindseye.art.ops._
 import com.simiacryptus.mindseye.art.util.ArtSetup.{ec2client, s3client}
 import com.simiacryptus.mindseye.art.util.{BasicOptimizer, _}
 import com.simiacryptus.mindseye.lang.cudnn.CudaMemory
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.cudnn.conv.ConvolutionLayer
+import com.simiacryptus.mindseye.layers.java.BoundedActivationLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
@@ -91,7 +92,7 @@ class Colorize extends ArtSetup[Object] {
     log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
     log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
-    val registration = registerWithIndex(canvas)
+    val registration = registerWithIndexJPG(canvas.get())
     try {
       lazy val decolorModel: Layer = {
         val layer = new ConvolutionLayer(1, 1, 3, 1)
@@ -116,8 +117,7 @@ class Colorize extends ArtSetup[Object] {
 
       def networkFn(dims: Seq[Int]): PipelineNetwork = {
         PipelineNetwork.build(1,
-          decolorModel, recolorModel
-          //, new BoundedActivationLayer().setMinValue(0).setMaxValue(255)
+          decolorModel, recolorModel, new BoundedActivationLayer().setMinValue(0).setMaxValue(255)
         )
       }
 
@@ -127,17 +127,27 @@ class Colorize extends ArtSetup[Object] {
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(
               styleLayers = List(
+                VGG19_0a
+              ),
+              styleModifiers = List(
+                //                new GramMatrixEnhancer(),
+                new MomentMatcher()
+              ).map(_.scale(1e3)),
+              styleUrl = List(styleUrl),
+              magnification = 2
+            ) + new VisualStyleNetwork(
+              styleLayers = List(
                 VGG19_1a,
                 VGG19_1b1,
                 VGG19_1b2,
                 VGG19_1c1,
                 VGG19_1c2,
                 VGG19_1c3,
-                VGG19_1c4,
-                VGG19_1d1,
-                VGG19_1d2,
-                VGG19_1d3,
-                VGG19_1d4
+                VGG19_1c4
+                //                VGG19_1d1,
+                //                VGG19_1d2,
+                //                VGG19_1d3,
+                //                VGG19_1d4
               ).flatMap(baseLayer => List(
                 baseLayer,
                 baseLayer.prependAvgPool(2),
@@ -151,10 +161,23 @@ class Colorize extends ArtSetup[Object] {
               magnification = 2
             ) + new VisualStyleContentNetwork(
               contentLayers = List(
-                VGG19_0a
-              ).flatMap(baseLayer => List(
-                baseLayer
-              )), contentModifiers = List(
+                VGG19_0a,
+                //                VGG19_0b
+                //                VGG19_1a
+                VGG19_1b1
+                //                VGG19_1b2
+                //                VGG19_1c1,
+                //                VGG19_1c2,
+                //                VGG19_1c3,
+                //                VGG19_1c4,
+                //                VGG19_1d1,
+                //                VGG19_1d2,
+                //                VGG19_1d3,
+                //                VGG19_1d4
+                //              ).flatMap(baseLayer => List(
+                //                baseLayer
+                //              )
+              ), contentModifiers = List(
                 new ContentMatcher().scale(1e2)
               ),
               viewLayer = networkFn
