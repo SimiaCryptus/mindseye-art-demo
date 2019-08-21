@@ -59,8 +59,9 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
   override def postConfigure(log: NotebookOutput) = {
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
+    implicit val _ = log
 
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, -1), "Reference Content"))
+    log.out(log.jpg(ImageArtUtil.load(log, contentUrl, -1), "Reference Content"))
     //    val smallPaintings = "file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads6.wikiart.org/full-fathom-five(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads0.wikiart.org/easter-and-the-totem(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads2.wikiart.org/stenographic-figure(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads6.wikiart.org/the-key(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads1.wikiart.org/the-tea-cup(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads6.wikiart.org/blue-moby-dick(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads7.wikiart.org/male-and-female(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads7.wikiart.org/moon-woman-1942(1).jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/jackson-pollock/going-west.jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/jackson-pollock/the-moon-woman-cuts-the-circle-1943.jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/uploads3.wikiart.org/composition-with-pouring-ii(1).jpg".split(";")
     //    val largePaintings = "file:///H:/SimiaCryptus/data-science-tools/wikiart/paul-jackson-pollock/not-detected.jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/jackson-pollock/number-7-out-of-the-web-1949.jpg;file:///H:/SimiaCryptus/data-science-tools/wikiart/jackson-pollock/convergence-1952.jpg".split(";")
     val List(
@@ -117,7 +118,7 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
           }
 
           override def onComplete()(implicit log: NotebookOutput): Unit = {
-            upload(log)
+            uploadAsync(log)
           }
         }, new GeometricSequence {
           override val min: Double = 120
@@ -163,7 +164,7 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
           }
 
           override def onComplete()(implicit log: NotebookOutput): Unit = {
-            upload(log)
+            uploadAsync(log)
           }
 
         }, new GeometricSequence {

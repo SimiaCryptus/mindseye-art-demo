@@ -71,6 +71,7 @@ abstract class OperatorStatsSurvey extends ArtSetup[Object] with BasicOptimizer 
 
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _ = log
     val tableOutput = new TableOutput()
     NotebookRunner.withMonitoredHtml(() => tableOutput.toHtmlTable) {
       for ((styleKey, styleFiles) <- styles) {
@@ -94,7 +95,7 @@ abstract class OperatorStatsSurvey extends ArtSetup[Object] with BasicOptimizer 
                   minWidth = OperatorStatsSurvey.this.styleMin,
                   maxWidth = OperatorStatsSurvey.this.styleMax,
                   maxPixels = OperatorStatsSurvey.this.stylePixelMax
-                ).apply(Tensor.fromRGB(VisionPipelineUtil.load(canvasName, imageSize)))
+                ).apply(Tensor.fromRGB(ImageArtUtil.load(log, canvasName, imageSize)))
                   .measure(new TrainingMonitor)
                   .sum
               ).asJava)

@@ -26,7 +26,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.VGG19._
 import com.simiacryptus.mindseye.art.ops._
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
+import com.simiacryptus.mindseye.art.util.{ArtSetup, ImageArtUtil}
 import com.simiacryptus.mindseye.art.{SumTrainable, TiledTrainable, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
@@ -36,7 +36,7 @@ import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.{CompoundRegion, RangeConstraint}
-import com.simiacryptus.mindseye.test.TestUtil
+import com.simiacryptus.mindseye.util.ImageUtil
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner.withMonitoredJpg
 import com.simiacryptus.sparkbook._
@@ -143,7 +143,7 @@ abstract class PatternTexture extends ArtSetup[Object] {
               styleTransfer(precision(res), styleImages, loadPatterns, canvas)(sub)
             }
             else {
-              canvas = Tensor.fromRGB(TestUtil.resize(canvas.toRgbImage, res, true))
+              canvas = Tensor.fromRGB(ImageUtil.resize(canvas.toRgbImage, res, true))
               sub.h2("Result")
               styleTransfer(
                 precision = precision(res),
@@ -164,14 +164,14 @@ abstract class PatternTexture extends ArtSetup[Object] {
 
   def loadImages(baseImage: Tensor, fileUrls: Array[String], minWidth: Int, maxWidth: Int, magnification: Double, maxPixels: Double)(implicit log: NotebookOutput) = {
     val styles = Random.shuffle(fileUrls.toList).map(styleUrl => {
-      var styleImage = VisionPipelineUtil.load(styleUrl, -1)
+      var styleImage = ImageArtUtil.load(log, styleUrl, -1)
       val canvasDims = baseImage.getDimensions()
       val canvasPixels = canvasDims(0) * canvasDims(1)
       val stylePixels = styleImage.getWidth * styleImage.getHeight
       var finalWidth = (styleImage.getWidth * Math.sqrt((canvasPixels.toDouble / stylePixels) * magnification)).toInt
       if (finalWidth < minWidth) finalWidth = minWidth
       if (finalWidth > Math.min(maxWidth, styleImage.getWidth)) finalWidth = Math.min(maxWidth, styleImage.getWidth)
-      val resized = TestUtil.resize(styleImage, finalWidth, true)
+      val resized = ImageUtil.resize(styleImage, finalWidth, true)
       log.p(log.jpg(resized, styleUrl))
       Tensor.fromRGB(resized)
     }).toBuffer

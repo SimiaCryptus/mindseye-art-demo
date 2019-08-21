@@ -46,7 +46,10 @@ abstract class JobRegistration[T]
   instances: List[String] = List(
     EC2Util.instanceId()
   ).filterNot(_.isEmpty),
-  id: String = UUID.randomUUID().toString
+  id: String = UUID.randomUUID().toString,
+  indexFile: String,
+  className: String,
+  description: String
 ) extends AutoCloseable with Logging {
   var future: ScheduledFuture[_] = null
 
@@ -75,31 +78,52 @@ abstract class JobRegistration[T]
       lastReport = System.currentTimeMillis(),
       instances = List(EC2Util.instanceId()),
       image = uploadImage(canvas()),
-      id = id
+      id = id,
+      className = className,
+      description = description
     ).save(bucket))
   }
 
   def rebuildIndex()(implicit s3client: AmazonS3, ec2client: AmazonEC2) = {
-    val bodyHtml = (for (item <- JobRegistry.list(bucket)) yield {
+    val jobs = JobRegistry.list(bucket).toArray.groupBy(_.className)
+    def toHtml(item: JobRegistry) = {
       if (item.isLive()(ec2client).toOption.getOrElse(false)) {
-        s"""<div><a href="${item.liveUrl}"><img src="${item.image}" style="max-width: 50%" /></a></div>""".stripMargin
+        s"""<div><a href="${item.liveUrl}"><img src="${item.image}" style="max-width: 50%" /></a>${item.description}</div>""".stripMargin
       } else {
-        s"""<div><a href="${item.reportUrl}"><img src="${item.image}" style="max-width: 50%" /></a></div>""".stripMargin
+        s"""<div><a href="${item.reportUrl}"><img src="${item.image}" style="max-width: 50%" /></a>${item.description}</div>""".stripMargin
       }
-    }).mkString("\n")
-    logger.info(s"Writing http://$bucket/index.html")
+    }
+    for((className, jobs) <- jobs.filterNot(_._1.isEmpty)) {
+      write(s"$className.html", (jobs.map(item => toHtml(item))).mkString("\n"))
+    }
+    write(indexFile, (jobs.mapValues(_.sortBy(-_.lastReport).head).map(item =>
+      s"""<h1><a href="${item._1}.html">${item._1}</a></h1>${toHtml(item._2)}""")).mkString("\n"))
+  }
+
+  def write(indexFile: String, bodyHtml: String)(implicit s3client: AmazonS3) = {
+    logger.info(s"Writing http://$bucket/$indexFile")
     val metadata = new ObjectMetadata()
     metadata.setContentType("text/html")
-    s3client.putObject(new PutObjectRequest(bucket, "index.html", new ByteArrayInputStream(
+    s3client.putObject(new PutObjectRequest(bucket, indexFile, new ByteArrayInputStream(
       s"""<html><head></head><body>
          |$bodyHtml
-         |</body></html>""".stripMargin.getBytes
+
+         |</body></html>""".stripMargin.
+        getBytes
     ), metadata).withCannedAcl(CannedAccessControlList.PublicRead))
   }
 
   def stop()(implicit s3client: AmazonS3, ec2client: AmazonEC2) = {
-    update()
-    close()
+    try {
+      update()
+    } catch {
+      case e : Throwable => logger.warn("Error in update",e)
+    }
+    try {
+      close()
+    } catch {
+      case e : Throwable => logger.warn("Error in close",e)
+    }
   }
 
   override def close(): Unit = {

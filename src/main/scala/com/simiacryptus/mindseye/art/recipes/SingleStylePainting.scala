@@ -37,9 +37,6 @@ import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.LocalRunner
 
 object SingleStylePaintingEC2 extends SingleStylePainting with EC2Runner[Object] with AWSNotebookRunner[Object] {
-  override val styleUrl: String = "s3://simiacryptus/photos/shutterstock_468243743.jpg"
-  override val contentUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
-  //override val initUrl: String = "s3://simiacryptus/photos/E19-E.jpg"
   override val s3bucket = "www.tigglegickle.com"
 
   override def nodeSettings: EC2NodeSettings = EC2NodeSettings.P3_2XL
@@ -58,21 +55,9 @@ object SingleStylePaintingEC2 extends SingleStylePainting with EC2Runner[Object]
 object SingleStylePainting extends SingleStylePainting with LocalRunner[Object] with NotebookRunner[Object]
 
 class SingleStylePainting extends ArtSetup[Object] {
-  val contentUrl =
-    "file:///C:/Users/andre/Downloads/IMG_20170507_162514668.jpg" // Road to city
-  //    "file:///C:/Users/andre/Downloads/pictures/E2-E.jpg" // Daddys girl
-  //    "file:///C:/Users/andre/Downloads/pictures/IMG_20181107_171439630_crop.jpg" // Boy portrait
-  //    "file:///C:/Users/andre/Downloads/img11262015_0645_2.jpg" // Kids by the lake
-
-  val styleUrl =
-    "file:///C:/Users/andre/Downloads/pictures/the-starry-night.jpg"
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_240121861.jpg" // Grafiti
-  //    "file:///C:/Users/andre/Downloads/pictures/1920x1080-kaufman_63748_5.jpg"
-  //    "file:///C:/Users/andre/Downloads/pictures/Pikachu-Pokemon-Wallpapers-SWA0039152.jpg"
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_1060865300.jpg" // Plasma Ball
-  //    "file:///C:/Users/andre/Downloads/pictures/shutterstock_468243743.jpg" // Leaves
-
-  val initUrl: String = "50+noise50"
+  val contentUrl = "upload:content"
+  val styleUrl = "upload:style"
+  val initUrl: String = "50 + noise * 50"
   val s3bucket: String = ""
 
   override def inputTimeoutSeconds = 5
@@ -82,10 +67,17 @@ class SingleStylePainting extends ArtSetup[Object] {
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
+    log.h1("Inputs")
+    log.h2("Style")
+    val styleImage = ImageArtUtil.load(log, styleUrl, 600)
+
+    log.out(log.jpg(styleImage, "Input Style"))
+    log.h2("Content")
+    log.out(log.jpg(ImageArtUtil.load(log, contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndexJPG(canvas.get())
+
+    log.h1("Painting")
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
         log.subreport((sub: NotebookOutput) => {

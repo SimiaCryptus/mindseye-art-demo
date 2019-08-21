@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.index.VisionProjector._
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, VisionPipelineUtil}
+import com.simiacryptus.mindseye.art.util.{ArtSetup, BasicOptimizer, ImageArtUtil}
 import com.simiacryptus.mindseye.art.{VisionPipeline, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.Tensor
 import com.simiacryptus.mindseye.layers.cudnn.BandAvgReducerLayer
@@ -129,7 +129,7 @@ abstract class VisionProjector extends ArtSetup[Object] with BasicOptimizer {
   @JsonIgnore def sparkFactory: SparkSession = {
     val builder = SparkSession.builder()
     import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    ImageArtUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
     builder.master("local[1]").getOrCreate()
   }
 
@@ -149,7 +149,7 @@ object VisionProjector {
 
   def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl: String)
                  (files: String*)
-                 (implicit sparkSession: SparkSession): DataFrame = {
+                 (implicit log: NotebookOutput, sparkSession: SparkSession): DataFrame = {
     val indexed = Try {
       val previousIndex = sparkSession.read.parquet(archiveUrl)
         .where((col("pipeline") eqNullSafe lit(visionPipeline.name)) and (col("resolution") eqNullSafe indexResolution))
@@ -162,10 +162,10 @@ object VisionProjector {
   }
 
   def index(pipeline: => VisionPipeline[VisionPipelineLayer], imageSize: Int, images: String*)
-           (implicit sparkSession: SparkSession) = {
+           (implicit log: NotebookOutput, sparkSession: SparkSession) = {
     val rows = sparkSession.sparkContext.parallelize(images, images.length).flatMap(file => {
       val layers = pipeline.getLayers.keys
-      val canvas = Tensor.fromRGB(VisionPipelineUtil.load(file, imageSize))
+      val canvas = Tensor.fromRGB(ImageArtUtil.load(log, file, imageSize))
       val tuples = layers.foldLeft(List(canvas))((input, layer) => {
         val l = layer.getLayer
         val tensors = input ++ List(l.eval(input.last).getDataAndFree.getAndFree(0))
@@ -225,7 +225,7 @@ object VisionProjector {
                        (implicit log: NotebookOutput) = {
     val rowCols = Math.sqrt(images.length).ceil.toInt
     val sprites = new ImgTileAssemblyLayer(rowCols, rowCols).eval(
-      (images ++ images.take((rowCols * rowCols) - images.length)).par.map(VisionPipelineUtil.load(_, spriteSize, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
+      (images ++ images.take((rowCols * rowCols) - images.length)).par.map(ImageArtUtil.load(log, _, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
     ).getDataAndFree.getAndFree(0)
     val pngTxt = log.png(sprites.toRgbImage, "sprites")
     log.p(pngTxt)

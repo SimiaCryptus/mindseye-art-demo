@@ -84,8 +84,8 @@ class Deblur extends ArtSetup[Object] {
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
+    log.out(log.jpg(ImageArtUtil.load(log, styleUrl, 600), "Input Style"))
+    log.out(log.jpg(ImageArtUtil.load(log, contentUrl, 600), "Reference Content"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndexJPG(canvas.get())
     try {

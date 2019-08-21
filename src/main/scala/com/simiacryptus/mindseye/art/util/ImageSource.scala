@@ -20,7 +20,8 @@
 package com.simiacryptus.mindseye.art.util
 
 import com.simiacryptus.mindseye.lang.Tensor
-import com.simiacryptus.mindseye.test.TestUtil
+import com.simiacryptus.mindseye.util.ImageUtil
+import com.simiacryptus.notebook.NotebookOutput
 
 import scala.util.Random
 
@@ -29,14 +30,14 @@ class ImageSource(urls: Seq[String]) {
 
   def tilePadding: Int = 16
 
-  def loadImages(canvasPixels: Int): Array[Tensor] = {
+  def loadImages(canvasPixels: Int)(implicit log: NotebookOutput): Array[Tensor] = {
     val styles = Random.shuffle(urls.toList).map(styleUrl => {
-      var styleImage = VisionPipelineUtil.load(styleUrl, -1)
+      var styleImage = ImageArtUtil.load(log, styleUrl, -1)
       val stylePixels = styleImage.getWidth * styleImage.getHeight
       var finalWidth = if (canvasPixels > 0) (styleImage.getWidth * Math.sqrt((canvasPixels.toDouble / stylePixels) * magnification)).toInt else -1
       if (finalWidth < minWidth && finalWidth > 0) finalWidth = minWidth
       if (finalWidth > Math.min(maxWidth, styleImage.getWidth)) finalWidth = Math.min(maxWidth, styleImage.getWidth)
-      val resized = TestUtil.resize(styleImage, finalWidth, true)
+      val resized = ImageUtil.resize(styleImage, finalWidth, true)
       Tensor.fromRGB(resized)
     }).toBuffer
     while (styles.map(_.getDimensions).map(d => d(0) * d(1)).sum > maxPixels) styles.remove(0)

@@ -27,9 +27,10 @@ import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.SumInputsLayer
 import com.simiacryptus.mindseye.network.PipelineNetwork
+import com.simiacryptus.notebook.NotebookOutput
 
 object VisualStyleNetwork {
-  lazy val DOMELA_1 = new VisualStyleNetwork(
+  def DOMELA_1(implicit log: NotebookOutput) = new VisualStyleNetwork(
     styleLayers = List(
       VGG19_1c1,
       VGG19_1c2,
@@ -42,7 +43,8 @@ object VisualStyleNetwork {
     ),
     styleUrl = ArtUtil.findFiles("cesar-domela")
   )
-  lazy val MONET_1 = new VisualStyleNetwork(
+
+  def MONET_1(implicit log: NotebookOutput) = new VisualStyleNetwork(
     styleLayers = List(VGG19_0b,
       VGG19_1a,
       VGG19_1b2,
@@ -58,7 +60,7 @@ object VisualStyleNetwork {
     styleUrl = ArtUtil.findFiles("claude-monet")
   )
 
-  lazy val MANET_1 = new VisualStyleNetwork(
+  def MANET_1(implicit log: NotebookOutput) = new VisualStyleNetwork(
     styleLayers = List(VGG19_0b,
       VGG19_1b1,
       VGG19_1b2),
@@ -69,7 +71,7 @@ object VisualStyleNetwork {
     styleUrl = ArtUtil.findFiles("edouard-manet")
   )
 
-  lazy val DRAWING_1 = new VisualStyleNetwork(
+  def DRAWING_1(implicit log: NotebookOutput) = new VisualStyleNetwork(
     styleLayers = List(VGG19_1a, VGG19_1b1, VGG19_1c1, VGG19_1d1, VGG19_1e1),
     styleModifiers = List(
       new ChannelMeanMatcher(),
@@ -103,7 +105,7 @@ object VisualStyleNetwork {
     )
   )
 
-  lazy val PAINTING_1 = new VisualStyleNetwork(
+  def PAINTING_1(implicit log: NotebookOutput) = new VisualStyleNetwork(
     styleLayers = List(VGG19_1a, VGG19_1b1, VGG19_1c1, VGG19_1d1, VGG19_1e1),
     styleModifiers = List(
       new ChannelMeanMatcher(),
@@ -158,7 +160,7 @@ case class VisualStyleNetwork
   override val maxWidth: Int = 10000,
   override val maxPixels: Double = 5e8,
   override val magnification: Double = 1.0
-) extends ImageSource(styleUrl) with VisualNetwork {
+)(implicit val log: NotebookOutput) extends ImageSource(styleUrl) with VisualNetwork {
 
   def apply(canvas: Tensor, content: Tensor = null): Trainable = {
     val loadedImages = loadImages(VisualStyleNetwork.pixels(canvas))

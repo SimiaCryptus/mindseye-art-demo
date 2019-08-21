@@ -35,8 +35,11 @@ class JpgRegistration
   instances: List[String] = List(
     EC2Util.instanceId()
   ).filterNot(_.isEmpty),
-  id: String = UUID.randomUUID().toString
-) extends JobRegistration[Tensor](bucket, reportUrl, liveUrl, canvas, instances, id) {
+  id: String = UUID.randomUUID().toString,
+  indexFile: String = "index.html",
+  className: String = "",
+  description: String = ""
+) extends JobRegistration[Tensor](bucket, reportUrl, liveUrl, canvas, instances, id, indexFile, className, description) {
 
   def uploadImage(canvas: Tensor)(implicit s3client: AmazonS3) = {
     val key = s"img/$id.jpg"

@@ -40,10 +40,11 @@ import com.simiacryptus.mindseye.opt.orient.TrustRegionStrategy
 import com.simiacryptus.mindseye.opt.region.{OrthonormalConstraint, TrustRegion}
 import com.simiacryptus.mindseye.opt.{IterativeTrainer, Step, TrainingMonitor}
 import com.simiacryptus.mindseye.test.{StepRecord, TestUtil}
+import com.simiacryptus.mindseye.util.ImageUtil
 import com.simiacryptus.notebook._
 import com.simiacryptus.sparkbook.NotebookRunner
 import com.simiacryptus.sparkbook.util.Java8Util._
-import com.simiacryptus.util.{FastRandom, Util}
+import com.simiacryptus.util.Util
 import org.apache.hadoop.fs.{FileSystem, Path}
 
 import scala.collection.JavaConversions._
@@ -65,7 +66,7 @@ object ArtUtil {
         (for ((url, v) <- getValue.toList.filter(_._2)) yield {
           val filename = url.split('/').last.toLowerCase.stripSuffix(".png") + ".png"
           if (pngCache.getOrElseUpdate(url, Try {
-            log.pngFile(VisionPipelineUtil.load(url, 256), new File(log.getResourceDir, filename))
+            log.pngFile(ImageArtUtil.load(log, url, 256), new File(log.getResourceDir, filename))
           }).isSuccess) {
             s"""<input type="checkbox" name="${ids(url)}" value="true"><img src="etc/$filename" alt="$url"><br/>"""
           } else {
@@ -74,7 +75,7 @@ object ArtUtil {
         }).mkString("\n")
       }
 
-      override def valueFromParams(parms: util.Map[String, String]): Map[String, Boolean] = {
+      override def valueFromParams(parms: util.Map[String, String], files: util.Map[String, String]): Map[String, Boolean] = {
         (for ((k, v) <- getValue) yield {
           k -> parms.getOrDefault(ids(k), "false").toBoolean
         })
@@ -113,57 +114,26 @@ object ArtUtil {
     })
   }
 
-  def load(content: Tensor, url: String)(implicit log: NotebookOutput): Tensor = {
-    val sumRegex = """(\d+)\+(.*)""".r
-    val noiseRegex = "noise(.*)".r
-    val contentDims = content.getDimensions
-    url match {
-      case "content" => content.copy()
-      case "plasma" => Tensor.fromRGB({
-        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
-      })
-      case sumRegex(offset: String, rest: String) => load(content, rest).mapAndFree((operand: Double) => offset.toInt + operand)
-      case noiseRegex(ampl: String) => Tensor.fromRGB({
-        val tensor = new Tensor(contentDims: _*).mapAndFree((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100))
-        val rgbImage = tensor.toRgbImage
-        tensor.freeRef()
-        rgbImage
-      })
-      case null => content.copy()
-      case _ => Tensor.fromRGB({
-        VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
-      })
-    }
-  }
-
   def cyclicalAnimation(canvases: => Seq[Tensor]): Seq[BufferedImage] = {
-    var list = canvases.filter(_ != null).map(_.toRgbImage)
+    val list = canvases.filter(_ != null).map(_.toRgbImage)
     if (list.isEmpty) {
       Seq.empty
     } else {
       val maxWidth = list.map(_.getWidth).max
-      list = list.map(TestUtil.resize(_, maxWidth, true))
-      (list ++ list.reverse.tail.dropRight(1))
+      cyclical(list.map(ImageUtil.resize(_, maxWidth, true)))
     }
   }
 
+  def cyclical[T](list: Seq[T]) = {
+    (list ++ list.reverse.tail.dropRight(1))
+  }
+
+  def load(content: Tensor, url: String)(implicit log: NotebookOutput): Tensor = {
+    load(content.getDimensions, url)
+  }
+
   def load(contentDims: Array[Int], url: String)(implicit log: NotebookOutput = new NullNotebookOutput()): Tensor = {
-    val noiseRegex = "noise(.*)".r
-    url match {
-      case "plasma" => Tensor.fromRGB(log.eval(() => {
-        new Plasma().paint(contentDims(0), contentDims(1)).toRgbImage
-      }))
-      case noiseRegex(ampl: String) => Tensor.fromRGB(log.eval(() => {
-        val tensor = new Tensor(contentDims: _*).mapAndFree((v: Double) => FastRandom.INSTANCE.random() * Option(ampl).filterNot(_.isEmpty).map(Integer.parseInt(_)).getOrElse(100))
-        val rgbImage = tensor.toRgbImage
-        tensor.freeRef()
-        rgbImage
-      }))
-      case null => new Tensor(contentDims: _*)
-      case _ => Tensor.fromRGB(log.eval(() => {
-        VisionPipelineUtil.load(url, contentDims(0), contentDims(1))
-      }))
-    }
+    ImageArtUtil.loadTensor(log, url, contentDims(0), contentDims(1))
   }
 
   def colorTransfer
@@ -201,7 +171,7 @@ object ArtUtil {
         override def getRegionPolicy(layer: Layer): TrustRegion = layer match {
           case null => null
           case layer if layer.isFrozen => null
-          case layer: SimpleConvolutionLayer => new OrthonormalConstraint(VisionPipelineUtil.getIndexMap(layer): _*)
+          case layer: SimpleConvolutionLayer => new OrthonormalConstraint(ImageArtUtil.getIndexMap(layer): _*)
           case _ => null
         }
       })
@@ -212,21 +182,6 @@ object ArtUtil {
       .setTerminateThreshold(0)
       .runAndFree
     colorAdjustmentLayer
-  }
-
-  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
-    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
-    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
-      .getDataAndFree.getAndFree(0).toRgbImage
-    assemblyLayer.freeRef()
-    grid
-  }).orNull
-
-  def withTrainingMonitor[T](fn: TrainingMonitor => Any)(implicit log: NotebookOutput): Any = {
-    val history = new ArrayBuffer[StepRecord]
-    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
-      fn(getTrainingMonitor(history))
-    }
   }
 
   def getTrainingMonitor[T](history: ArrayBuffer[StepRecord] = new ArrayBuffer[StepRecord], verbose: Boolean = true): TrainingMonitor = {
@@ -248,12 +203,27 @@ object ArtUtil {
     trainingMonitor
   }
 
+  def imageGrid(currentImage: BufferedImage, columns: Int = 2, rows: Int = 2) = Option(currentImage).map(tensor => {
+    val assemblyLayer = new ImgTileAssemblyLayer(columns, rows)
+    val grid = assemblyLayer.eval(Stream.continually(Tensor.fromRGB(tensor)).take(columns * rows): _*)
+      .getDataAndFree.getAndFree(0).toRgbImage
+    assemblyLayer.freeRef()
+    grid
+  }).orNull
+
+  def withTrainingMonitor[T](fn: TrainingMonitor => T)(implicit log: NotebookOutput): T = {
+    val history = new ArrayBuffer[StepRecord]
+    NotebookRunner.withMonitoredJpg(() => Util.toImage(TestUtil.plot(history))) {
+      fn(getTrainingMonitor(history))
+    }
+  }
+
   def findFiles(key: String, base: String): Array[String] = findFiles(Set(key), base)
 
   def findFiles(key: String): Array[String] = findFiles(Set(key))
 
   def findFiles(key: Set[String], base: String = "s3a://data-cb03c/crawl/wikiart/", minSize: Int = 32 * 1024): Array[String] = {
-    val itr = FileSystem.get(new URI(base), VisionPipelineUtil.getHadoopConfig()).listFiles(new Path(base), true)
+    val itr = FileSystem.get(new URI(base), ImageArtUtil.getHadoopConfig()).listFiles(new Path(base), true)
     val buffer = new ArrayBuffer[String]()
     while (itr.hasNext) {
       val status = itr.next()

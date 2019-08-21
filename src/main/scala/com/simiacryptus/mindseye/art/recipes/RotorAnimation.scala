@@ -87,9 +87,9 @@ class RotorAnimation extends RotorArt {
     implicit val _log = log
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
-    log.out(log.jpg(VisionPipelineUtil.load(colorUrl, 600), "Input Color"))
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(patternUrl, 600), "Input Pattern"))
+    log.out(log.jpg(ImageArtUtil.load(log, colorUrl, 600), "Input Color"))
+    log.out(log.jpg(ImageArtUtil.load(log, styleUrl, 600), "Input Style"))
+    log.out(log.jpg(ImageArtUtil.load(log, patternUrl, 600), "Input Pattern"))
     val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to (transitions * 2 + 1)).map(_ => new AtomicReference[Tensor](null)).toList
     val renderingFn: Seq[Int] => PipelineNetwork = dims => {
       val network = getKaleidoscope(dims.toArray).copyPipeline()
@@ -104,7 +104,7 @@ class RotorAnimation extends RotorArt {
       transformed
     })
 
-    val registration = registerWithIndexGIF(renderedCanvases)
+    val registration = registerWithIndexGIF2(renderedCanvases)
     try {
       val calcFn: Seq[Int] => PipelineNetwork = dims => {
         val padding = 0 // Math.min(256, Math.max(16, dims(0) / 2))

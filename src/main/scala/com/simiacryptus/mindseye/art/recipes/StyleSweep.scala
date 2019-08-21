@@ -86,10 +86,10 @@ class StyleSweep extends ArtSetup[Object] {
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
 
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
-    log.out(log.jpg(VisionPipelineUtil.load(contentUrl, 600), "Reference Content"))
+    log.out(log.jpg(ImageArtUtil.load(log, styleUrl, 600), "Input Style"))
+    log.out(log.jpg(ImageArtUtil.load(log, contentUrl, 600), "Reference Content"))
     val canvases: immutable.Seq[AtomicReference[Tensor]] = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
-    val registration = registerWithIndexGIF(canvases.map(_.get()))
+    val registration = registerWithIndexGIF2(canvases.map(_.get()))
     try {
       NotebookRunner.withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {

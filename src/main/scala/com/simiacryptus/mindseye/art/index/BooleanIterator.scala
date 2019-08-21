@@ -43,7 +43,7 @@ import com.simiacryptus.mindseye.network.{PipelineNetwork, SimpleLossNetwork}
 import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
 import com.simiacryptus.mindseye.opt.orient.OwlQn
-import com.simiacryptus.mindseye.test.TestUtil
+import com.simiacryptus.mindseye.util.ImageUtil
 import com.simiacryptus.notebook.{FormQuery, MarkdownNotebookOutput, NotebookOutput}
 import com.simiacryptus.sparkbook.util.Java8Util._
 import com.simiacryptus.sparkbook.util.{LocalRunner, ScalaJson}
@@ -182,7 +182,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
       Await.result(Future.sequence(for ((k, v) <- seed) yield Future {
         try {
           val filename = k.split('/').last.toLowerCase.stripSuffix(".png") + ".png"
-          pngCache.getOrElseUpdate(k, log.pngFile(VisionPipelineUtil.load(k, 256), new File(log.getResourceDir, filename)))
+          pngCache.getOrElseUpdate(k, log.pngFile(ImageArtUtil.load(log, k, 256), new File(log.getResourceDir, filename)))
         } catch {
           case e: Throwable => e.printStackTrace()
         }
@@ -196,12 +196,12 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         override protected def getFormInnerHtml: String = {
           (for ((k, v) <- getValue) yield {
             val filename = k.split('/').last.toLowerCase.stripSuffix(".png") + ".png"
-            pngCache.getOrElseUpdate(k, log.pngFile(VisionPipelineUtil.load(k, 256), new File(log.getResourceDir, filename)))
+            pngCache.getOrElseUpdate(k, log.pngFile(ImageArtUtil.load(log, k, 256), new File(log.getResourceDir, filename)))
             s"""<input type="checkbox" name="${ids(k)}" value="true"><img src="etc/$filename"><br/>"""
           }).mkString("\n")
         }
 
-        override def valueFromParams(parms: java.util.Map[String, String]): Map[String, Boolean] = {
+        override def valueFromParams(parms: java.util.Map[String, String], files: java.util.Map[String, String]): Map[String, Boolean] = {
           (for ((k, v) <- getValue) yield {
             k -> parms.getOrDefault(ids(k), "false").toBoolean
           })
@@ -288,7 +288,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
   @JsonIgnore def sparkFactory: SparkSession = {
     val builder = SparkSession.builder()
     import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    ImageArtUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
     builder.master("local[8]").getOrCreate()
   }
 
@@ -369,10 +369,10 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         override def steps = 5
       }.toStream.foldLeft[Option[Tensor]](None)((imgOpt, res) => imgOpt.map(img => {
         precision = Precision.Float
-        train(Tensor.fromRGB(TestUtil.resize(img.toRgbImage, res.toInt, true)), log = sub)
+        train(Tensor.fromRGB(ImageUtil.resize(img.toRgbImage, res.toInt, true)), log = sub)
       }).orElse({
         precision = Precision.Double
-        val img = VisionPipelineUtil.load(content_url, res.toInt)
+        val img = ImageArtUtil.load(log, content_url, res.toInt)
         Option(train(Tensor.fromRGB(img), log = sub))
       }))
     })
@@ -404,7 +404,7 @@ object BooleanIterator {
 
   def indexImages(visionPipeline: => VisionPipeline[VisionPipelineLayer], toIndex: Int, indexResolution: Int, archiveUrl: String)
                  (files: String*)
-                 (implicit sparkSession: SparkSession): DataFrame = {
+                 (implicit log: NotebookOutput, sparkSession: SparkSession): DataFrame = {
     val indexed = Try {
       val previousIndex = sparkSession.read.parquet(archiveUrl)
       previousIndex.select("file").rdd.map(_.getString(0)).distinct().collect().toSet
@@ -415,10 +415,10 @@ object BooleanIterator {
   }
 
   def index(pipeline: => VisionPipeline[VisionPipelineLayer], imageSize: Int, images: String*)
-           (implicit sparkSession: SparkSession) = {
+           (implicit log: NotebookOutput, sparkSession: SparkSession) = {
     val rows = sparkSession.sparkContext.parallelize(images, images.length).flatMap(file => {
       val layers = pipeline.getLayers.keys
-      val canvas = Tensor.fromRGB(VisionPipelineUtil.load(file, imageSize))
+      val canvas = Tensor.fromRGB(ImageArtUtil.load(log, file, imageSize))
       val tuples = layers.foldLeft(List(canvas))((input, layer) => {
         val l = layer.getLayer
         val tensors = input ++ List(l.eval(input.last).getDataAndFree.getAndFree(0))
@@ -478,7 +478,7 @@ object BooleanIterator {
                        (implicit log: NotebookOutput) = {
     val rowCols = Math.sqrt(images.length).ceil.toInt
     val sprites = new ImgTileAssemblyLayer(rowCols, rowCols).eval(
-      (images ++ images.take((rowCols * rowCols) - images.length)).par.map(VisionPipelineUtil.load(_, spriteSize, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
+      (images ++ images.take((rowCols * rowCols) - images.length)).par.map(ImageArtUtil.load(log, _, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
     ).getDataAndFree.getAndFree(0)
     val pngTxt = log.png(sprites.toRgbImage, "sprites")
     log.p(pngTxt)

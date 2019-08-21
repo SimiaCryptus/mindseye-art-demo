@@ -28,7 +28,7 @@ import com.simiacryptus.mindseye.art.util._
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Tensor}
 import com.simiacryptus.mindseye.layers.java._
-import com.simiacryptus.mindseye.test.TestUtil
+import com.simiacryptus.mindseye.util.ImageUtil
 import com.simiacryptus.notebook.{NotebookOutput, NullNotebookOutput}
 import com.simiacryptus.sparkbook.NotebookRunner._
 import com.simiacryptus.sparkbook._
@@ -71,6 +71,7 @@ abstract class Stereogram extends ArtSetup[Object] with BasicOptimizer {
   override def cudaLog = false
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _ = log
     log.eval(() => {
       ScalaJson.toJson(Map(
         "this" -> Stereogram.this
@@ -103,7 +104,7 @@ abstract class Stereogram extends ArtSetup[Object] with BasicOptimizer {
               canvas = load(Array(res, (res * aspectRatio).toInt, 3), seed)(new NullNotebookOutput())
             }
             else {
-              canvas = Tensor.fromRGB(TestUtil.resize(canvas.toRgbImage, res, true))
+              canvas = Tensor.fromRGB(ImageUtil.resize(canvas.toRgbImage, res, true))
             }
             val canvasDims = canvas.getDimensions
             val viewLayer = new ImgViewLayer(canvasDims(0) + tiledViewPadding, canvasDims(1) + tiledViewPadding, true)

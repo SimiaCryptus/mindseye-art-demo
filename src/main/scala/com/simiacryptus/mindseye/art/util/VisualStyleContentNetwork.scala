@@ -26,6 +26,7 @@ import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
 import com.simiacryptus.mindseye.layers.java.{AssertDimensionsLayer, SumInputsLayer}
 import com.simiacryptus.mindseye.network.PipelineNetwork
+import com.simiacryptus.notebook.NotebookOutput
 
 object VisualStyleContentNetwork {
 
@@ -47,7 +48,7 @@ case class VisualStyleContentNetwork
   override val maxWidth: Int = 2048,
   override val maxPixels: Double = 5e6,
   override val magnification: Double = 1.0
-) extends ImageSource(styleUrl) with VisualNetwork {
+)(implicit val log: NotebookOutput) extends ImageSource(styleUrl) with VisualNetwork {
 
   def apply(canvas: Tensor, content: Tensor): Trainable = {
     val loadedImages = loadImages(VisualStyleNetwork.pixels(canvas))

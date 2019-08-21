@@ -83,13 +83,14 @@ abstract class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
 
 
   override def postConfigure(log: NotebookOutput) = {
+    implicit val _ = log
     val tableOutput = new TableOutput()
     val urlBase = "http://localhost:1080/etc/"
     NotebookRunner.withMonitoredHtml(() => tableOutput.toHtmlTable) {
       val embeddingConfigs = new ArrayBuffer[Map[String, Any]]()
       val rowCols = Math.sqrt(images.length).ceil.toInt
       val sprites = new ImgTileAssemblyLayer(rowCols, rowCols).eval(
-        (images ++ images.take((rowCols * rowCols) - images.length)).par.map(VisionPipelineUtil.load(_, spriteSize, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
+        (images ++ images.take((rowCols * rowCols) - images.length)).par.map(ImageArtUtil.load(log, _, spriteSize)).map(Tensor.fromRGB(_)).toArray: _*
       ).getDataAndFree.getAndFree(0)
       val pngTxt = log.png(sprites.toRgbImage, "sprites")
       log.p(pngTxt)
@@ -132,7 +133,7 @@ abstract class OperatorProjector extends ArtSetup[Object] with BasicOptimizer {
           val embeddings: Map[String, Array[Double]] = (
             for (canvasFile <- images) yield {
               canvasFile -> (for ((styleFile, trainable) <- styleVector.zip(trainables).toArray) yield {
-                val canvas = Tensor.fromRGB(VisionPipelineUtil.load(canvasFile, imageSize, imageSize))
+                val canvas = Tensor.fromRGB(ImageArtUtil.load(log, canvasFile, imageSize))
                 globalCanvas.set(canvas)
                 val result = trainable.measure(new TrainingMonitor).sum
                 canvas.freeRef()

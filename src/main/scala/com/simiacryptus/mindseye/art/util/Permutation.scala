@@ -62,19 +62,7 @@ class Permutation(val indices: Array[Int]) {
 
   def unity = Permutation.unity(rank)
 
-  def matrix: RealMatrix = {
-    val rank = this.rank
-    val matrix = new Array2DRowRealMatrix(3, 3)
-    val tuples = indices.zipWithIndex.map(t => (t._1.abs - 1, t._2, t._1.signum))
-    for ((x, y, v) <- tuples) matrix.setEntry(x, y, v)
-    matrix
-  }
-
   def rank: Int = indices.length
-
-  def ring = {
-    List(this) ++ Stream.iterate(this)(_ * this).drop(1).takeWhile(_ != this)
-  }
 
   def *(right: Permutation): Permutation = Permutation(this * right.indices: _*)
 
@@ -86,6 +74,18 @@ class Permutation(val indices: Array[Int]) {
         right(idx - 1)
       }
     })
+  }
+
+  def matrix: RealMatrix = {
+    val rank = this.rank
+    val matrix = new Array2DRowRealMatrix(3, 3)
+    val tuples = indices.zipWithIndex.map(t => (t._1.abs - 1, t._2, t._1.signum))
+    for ((x, y, v) <- tuples) matrix.setEntry(x, y, v)
+    matrix
+  }
+
+  def ring = {
+    List(this) ++ Stream.iterate(this)(_ * this).drop(1).takeWhile(_ != this)
   }
 
   override def toString: String = "[" + indices.mkString(",") + "]"

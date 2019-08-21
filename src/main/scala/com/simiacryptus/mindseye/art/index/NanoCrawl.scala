@@ -25,7 +25,7 @@ import java.util.UUID
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.simiacryptus.aws.exe.EC2NodeSettings
-import com.simiacryptus.mindseye.art.util.VisionPipelineUtil
+import com.simiacryptus.mindseye.art.util.ImageArtUtil
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.util.{LocalRunner, Logging}
 import com.simiacryptus.sparkbook.{EC2Runner, InteractiveSetup, NotebookRunner}
@@ -63,7 +63,7 @@ object NanoCrawl_Local extends LocalRunner[Object] with NanoCrawl {
   override def sparkFactory: SparkSession = {
     val builder = SparkSession.builder()
     import scala.collection.JavaConverters._
-    VisionPipelineUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
+    ImageArtUtil.getHadoopConfig().asScala.foreach(t => builder.config(t.getKey, t.getValue))
     builder.master("local[2]").getOrCreate()
   }
 }
@@ -144,7 +144,7 @@ trait NanoCrawl extends InteractiveSetup[Object] with NotebookRunner[Object] wit
       case "" => false
       case _ => true
     }) {
-      val fileSystem = FileSystem.get(new URI(storage), VisionPipelineUtil.getHadoopConfig())
+      val fileSystem = FileSystem.get(new URI(storage), ImageArtUtil.getHadoopConfig())
       val virtualPath = Option(url.getPath.stripPrefix("/").trim).filterNot(_.isEmpty).getOrElse(UUID.randomUUID().toString + ".html")
       val saveTarget = new Path(storage, virtualPath + (if (virtualPath.contains(".")) "" else ".html"))
       val saveAs = fileSystem.create(saveTarget)

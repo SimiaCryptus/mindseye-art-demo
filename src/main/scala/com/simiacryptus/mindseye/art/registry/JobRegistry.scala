@@ -48,7 +48,9 @@ case class JobRegistry
   lastReport: Long,
   instances: List[String],
   image: String,
-  id: String
+  id: String,
+  className: String,
+  description: String
 ) {
 
   def save(bucket: String)(implicit s3client: AmazonS3) = {

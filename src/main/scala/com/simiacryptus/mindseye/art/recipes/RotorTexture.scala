@@ -77,7 +77,7 @@ class RotorTexture extends RotorArt {
     implicit val _log = log
     log.setArchiveHome(URI.create(s"s3://$s3bucket/${getClass.getSimpleName.stripSuffix("$")}/${UUID.randomUUID()}/"))
     log.onComplete(() => upload(log): Unit)
-    log.out(log.jpg(VisionPipelineUtil.load(styleUrl, 600), "Input Style"))
+    log.out(log.jpg(ImageArtUtil.load(log, styleUrl, 600), "Input Style"))
     val canvas = new AtomicReference[Tensor](null)
     val registration = registerWithIndexJPG(canvas.get())
     try {

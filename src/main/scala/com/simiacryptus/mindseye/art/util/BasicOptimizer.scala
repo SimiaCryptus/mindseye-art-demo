@@ -44,50 +44,12 @@ import scala.collection.mutable.ArrayBuffer
 
 trait BasicOptimizer extends Logging {
 
-  def optimize(canvasImage: Tensor, trainable: Trainable)(implicit log: NotebookOutput) = {
+  def optimize(canvasImage: Tensor, trainable: Trainable)(implicit log: NotebookOutput):Double = {
     try {
-      def currentImage = renderingNetwork(canvasImage.getDimensions).eval(canvasImage).getDataAndFree.getAndFree(0).toRgbImage
-
-      val timelineAnimation = new ArrayBuffer[BufferedImage]()
-      withMonitoredJpg(() => currentImage) {
+      def currentImage = render(canvasImage).toRgbImage
+      withMonitoredJpg[Double](() => currentImage) {
         log.subreport("Optimization_" + UUID.randomUUID().toString, (sub: NotebookOutput) => {
-          NotebookRunner.withMonitoredGif(() => timelineAnimation.toList ++ List(currentImage)) {
-            withTrainingMonitor(trainingMonitor => {
-              sub.eval(() => {
-                val lineSearchInstance: LineSearchStrategy = lineSearchFactory
-                IterativeTrainer.wrap(trainable)
-                  .setOrientation(orientation())
-                  .setMonitor(new TrainingMonitor() {
-                    override def clear(): Unit = trainingMonitor.clear()
-
-                    override def log(msg: String): Unit = trainingMonitor.log(msg)
-
-                    override def onStepFail(currentPoint: Step): Boolean = {
-                      BasicOptimizer.this.onStepFail(trainable, currentPoint)
-                    }
-
-                    override def onStepComplete(currentPoint: Step): Unit = {
-                      if (0 < logEvery && 0 == currentPoint.iteration % logEvery) {
-                        val image = currentImage
-                        timelineAnimation += image
-                        sub.p(sub.jpg(image, "Iteration " + currentPoint.iteration))
-                      }
-                      BasicOptimizer.this.onStepComplete(trainable, currentPoint)
-                      trainingMonitor.onStepComplete(currentPoint)
-                      super.onStepComplete(currentPoint)
-                    }
-                  })
-                  .setTimeout(trainingMinutes, TimeUnit.MINUTES)
-                  .setMaxIterations(trainingIterations)
-                  .setLineSearchFactory((_: CharSequence) => lineSearchInstance)
-                  .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
-                  .runAndFree
-                  .asInstanceOf[lang.Double]
-              })
-              null
-            })(sub)
-          }(sub)
-          null
+          optimize(currentImage, trainable)(sub).asInstanceOf[java.lang.Double]
         })
       }
     } finally {
@@ -97,6 +59,49 @@ trait BasicOptimizer extends Logging {
         case e: Throwable => logger.warn("Error running onComplete", e)
       }
     }
+  }
+
+  def render(canvasImage: Tensor) = {
+    renderingNetwork(canvasImage.getDimensions).eval(canvasImage).getDataAndFree.getAndFree(0)
+  }
+
+  def optimize(currentImage: => BufferedImage, trainable: Trainable)(implicit out: NotebookOutput):Double = {
+    val timelineAnimation = new ArrayBuffer[BufferedImage]()
+    NotebookRunner.withMonitoredGif(() => timelineAnimation.toList ++ List(currentImage)) {
+      withTrainingMonitor(trainingMonitor => {
+        out.eval(() => {
+          val lineSearchInstance: LineSearchStrategy = lineSearchFactory
+          IterativeTrainer.wrap(trainable)
+            .setOrientation(orientation())
+            .setMonitor(new TrainingMonitor() {
+              override def clear(): Unit = trainingMonitor.clear()
+
+              override def log(msg: String): Unit = trainingMonitor.log(msg)
+
+              override def onStepFail(currentPoint: Step): Boolean = {
+                BasicOptimizer.this.onStepFail(trainable, currentPoint)
+              }
+
+              override def onStepComplete(currentPoint: Step): Unit = {
+                if (0 < logEvery && 0 == currentPoint.iteration % logEvery) {
+                  val image = currentImage
+                  timelineAnimation += image
+                  out.p(out.jpg(image, "Iteration " + currentPoint.iteration))
+                }
+                BasicOptimizer.this.onStepComplete(trainable, currentPoint)
+                trainingMonitor.onStepComplete(currentPoint)
+                super.onStepComplete(currentPoint)
+              }
+            })
+            .setTimeout(trainingMinutes, TimeUnit.MINUTES)
+            .setMaxIterations(trainingIterations)
+            .setLineSearchFactory((_: CharSequence) => lineSearchInstance)
+            .setTerminateThreshold(java.lang.Double.NEGATIVE_INFINITY)
+            .runAndFree
+            .asInstanceOf[lang.Double]
+        })
+      })(out)
+    }(out)
   }
 
   def renderingNetwork(dims: Seq[Int]): PipelineNetwork = new PipelineNetwork(1)

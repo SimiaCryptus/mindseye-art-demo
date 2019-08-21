@@ -29,7 +29,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.VGG16._
 import com.simiacryptus.mindseye.art.ops.{ChannelMeanMatcher, GramMatrixEnhancer, GramMatrixMatcher}
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.util.{ArtSetup, VisionPipelineUtil}
+import com.simiacryptus.mindseye.art.util.{ArtSetup, ImageArtUtil}
 import com.simiacryptus.mindseye.art.{SumTrainable, TiledTrainable, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.cudnn.{CudaSettings, MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Coordinate, Layer, LayerBase, Tensor}
@@ -42,7 +42,7 @@ import com.simiacryptus.mindseye.opt.IterativeTrainer
 import com.simiacryptus.mindseye.opt.line.ArmijoWolfeSearch
 import com.simiacryptus.mindseye.opt.orient.{LBFGS, TrustRegionStrategy}
 import com.simiacryptus.mindseye.opt.region.{OrthonormalConstraint, RangeConstraint}
-import com.simiacryptus.mindseye.test.TestUtil
+import com.simiacryptus.mindseye.util.ImageUtil
 import com.simiacryptus.notebook.NotebookOutput
 import com.simiacryptus.sparkbook.NotebookRunner._
 import com.simiacryptus.sparkbook._
@@ -141,10 +141,10 @@ abstract class TileBuilder extends ArtSetup[Object] {
         log.p(ScalaJson.toJson(key))
         key ++ Map(
           "img" -> paint(styleName, findFiles(styleName): _*)((canvasDims: Array[Int]) => {
-            val bottom = TestUtil.resize(bottomImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
-            val top = TestUtil.resize(topImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
-            val left = TestUtil.resize(leftImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
-            val right = TestUtil.resize(rightImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val bottom = ImageUtil.resize(bottomImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val top = ImageUtil.resize(topImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val left = ImageUtil.resize(leftImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
+            val right = ImageUtil.resize(rightImage(canvasDims(0)).toRgbImage, canvasDims(0), true)
             val network = new PipelineNetwork(1)
             network.wrap(new ImgTileAssemblyLayer(3, 3),
               network.wrap(new ValueLayer(selectRight(selectBottom(top, tiledViewPadding).toRgbImage, tiledViewPadding)), Array.empty[DAGNode]: _*),
@@ -219,9 +219,9 @@ abstract class TileBuilder extends ArtSetup[Object] {
             if (null == canvas) {
               canvas = load(Array(width, (width * aspectRatio).toInt), seed)()
             } else {
-              canvas = Tensor.fromRGB(TestUtil.resize(canvas.toRgbImage(), width, true))
+              canvas = Tensor.fromRGB(ImageUtil.resize(canvas.toRgbImage(), width, true))
             }
-            val styleTensors = loadStyles(canvas, styleUrl: _*)
+            val styleTensors = loadStyles(canvas, styleUrl: _*)(_log)
             styleTransfer(precision(width), styleTensors, styleTensors, canvas, PipelineNetwork.wrap(1,
               borderLayer(canvas.getDimensions),
               postPaintLayer.addRef(),
@@ -236,15 +236,15 @@ abstract class TileBuilder extends ArtSetup[Object] {
 
   def precision(width: Int) = if (width < 128) Precision.Double else Precision.Float
 
-  def loadStyles(contentImage: Tensor, styleUrl: String*) = {
+  def loadStyles(contentImage: Tensor, styleUrl: String*)(implicit log: NotebookOutput) = {
     val styles = Random.shuffle(styleUrl.toList).map(styleUrl => {
-      var styleImage = VisionPipelineUtil.load(styleUrl, -1)
+      var styleImage = ImageArtUtil.load(log, styleUrl, -1)
       val canvasDims = contentImage.getDimensions()
       val canvasPixels = canvasDims(0) * canvasDims(1)
       val stylePixels = styleImage.getWidth * styleImage.getHeight
       var finalWidth = (styleImage.getWidth * Math.sqrt((canvasPixels.toDouble / stylePixels)) * styleMagnification).toInt
       if (finalWidth > styleImage.getWidth) finalWidth = styleImage.getWidth
-      val resized = TestUtil.resize(styleImage, finalWidth, true)
+      val resized = ImageUtil.resize(styleImage, finalWidth, true)
       Tensor.fromRGB(resized)
     }).toBuffer
     while (styles.map(_.getDimensions).map(d => d(0) * d(1)).sum > stylePixelMax) styles.remove(0)
@@ -276,7 +276,7 @@ abstract class TileBuilder extends ArtSetup[Object] {
         override def getRegionPolicy(layer: Layer) = layer match {
           case null => new RangeConstraint().setMin(0).setMax(256)
           case layer if layer.isFrozen => null
-          case layer: SimpleConvolutionLayer => new OrthonormalConstraint(VisionPipelineUtil.getIndexMap(layer): _*)
+          case layer: SimpleConvolutionLayer => new OrthonormalConstraint(ImageArtUtil.getIndexMap(layer): _*)
           case _ => null
         }
       }

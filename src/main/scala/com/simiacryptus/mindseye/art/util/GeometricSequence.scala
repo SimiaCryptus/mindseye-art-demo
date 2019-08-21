@@ -27,7 +27,7 @@ trait GeometricSequence {
 
   def steps: Int
 
-  def toStream = Stream.iterate(min)(_ * growth).take(steps)
+  def toStream = if(steps==1) Stream(max) else Stream.iterate(min)(_ * growth).take(steps)
 
   private def growth = Math.pow(max / min, 1.0 / (steps - 1))
 

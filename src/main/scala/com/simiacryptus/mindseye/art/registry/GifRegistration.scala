@@ -37,15 +37,19 @@ class GifRegistration
   instances: List[String] = List(
     EC2Util.instanceId()
   ).filterNot(_.isEmpty),
-  id: String = UUID.randomUUID().toString
-) extends JobRegistration[Seq[BufferedImage]](bucket, reportUrl, liveUrl, canvas, instances, id) {
+  id: String = UUID.randomUUID().toString,
+  indexFile: String = "index.html",
+  className: String = "",
+  description: String = "",
+  delay: Int = 100
+) extends JobRegistration[Seq[BufferedImage]](bucket, reportUrl, liveUrl, canvas, instances, id, indexFile, className, description) {
 
   def uploadImage(canvas: Seq[BufferedImage])(implicit s3client: AmazonS3) = {
     val key = s"img/$id.gif"
     logger.info("Writing " + key)
     val metadata = new ObjectMetadata()
     val stream = new ByteArrayOutputStream()
-    NotebookRunner.toGif(stream, canvas)
+    NotebookRunner.toGif(stream, canvas, delay)
     metadata.setContentType("image/gif")
     s3client.putObject(new PutObjectRequest(bucket, key, new ByteArrayInputStream(stream.toByteArray), metadata)
       .withCannedAcl(CannedAccessControlList.PublicRead))
