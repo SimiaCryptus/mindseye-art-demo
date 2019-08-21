@@ -158,6 +158,11 @@
             <artifactId>hadoop-aws</artifactId>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>com.simiacryptus</groupId>
+            <artifactId>deepart.studio</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
 </project>
