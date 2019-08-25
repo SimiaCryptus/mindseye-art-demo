@@ -76,7 +76,7 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
 
     val canvas = new AtomicReference[Tensor](null)
     withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
-      log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+      log.subreport("Painting", (sub: NotebookOutput) => {
         paint(contentUrl, initUrl, canvas, sub.eval(() => {
           new VisualStyleNetwork(
             styleLayers = List(
@@ -127,7 +127,7 @@ object WikiartStyle extends ArtSetup[Object] with LocalRunner[Object] with Noteb
         }.toStream: _*)(sub)
         null
       })
-      log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+      log.subreport("Painting", (sub: NotebookOutput) => {
         paint(contentUrl, initUrl, canvas, sub.eval(() => {
           new VisualStyleNetwork(
             styleLayers = List(

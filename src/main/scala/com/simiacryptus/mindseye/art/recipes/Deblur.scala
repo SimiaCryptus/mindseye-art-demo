@@ -90,7 +90,7 @@ class Deblur extends ArtSetup[Object] {
     val registration = registerWithIndexJPG(canvas.get())
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           def blurModel: ConvolutionLayer = sub.eval(() => {
             val blurModel = new ConvolutionLayer(3, 3, 3, 1)
             val kernel = blurModel.getKernel

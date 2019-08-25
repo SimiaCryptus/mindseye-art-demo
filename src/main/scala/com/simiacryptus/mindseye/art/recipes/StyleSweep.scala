@@ -92,7 +92,7 @@ class StyleSweep extends ArtSetup[Object] {
     val registration = registerWithIndexGIF2(canvases.map(_.get()))
     try {
       NotebookRunner.withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
             new GeometricSequence {
               override val min = 1e-1

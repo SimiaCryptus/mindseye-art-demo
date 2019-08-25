@@ -62,7 +62,7 @@ object RotorAnimation extends RotorAnimation with LocalRunner[Object] with Noteb
 
 class RotorAnimation extends RotorArt {
 
-  override lazy val rotationalChannelPermutation: Array[Int] = Array(1, 2, 3)
+  override val rotationalChannelPermutation: Array[Int] = Array(1, 2, 3)
   override val rotationalSegments: Int = 5
   val colorUrl =
   //    "https://upload.wikimedia.org/wikipedia/commons/3/34/Camp_fire.jpg"
@@ -117,7 +117,7 @@ class RotorAnimation extends RotorArt {
       NotebookRunner.withMonitoredGif(() => {
         cyclicalAnimation(renderedCanvases)
       }) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paintBisection("", initUrl, canvases, sub.eval(() => {
             (1 to (transitions * 2 + 1)).map(step => f"step = $step%d" -> {
               var visualStyle: VisualNetwork = new VisualStyleNetwork(

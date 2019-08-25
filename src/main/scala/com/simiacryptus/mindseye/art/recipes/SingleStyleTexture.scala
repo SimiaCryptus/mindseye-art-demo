@@ -81,7 +81,7 @@ class SingleStyleTexture extends ArtSetup[Object] {
     val registration = registerWithIndexJPG(canvas.get())
     try {
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paint(styleUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(
               styleLayers = List(

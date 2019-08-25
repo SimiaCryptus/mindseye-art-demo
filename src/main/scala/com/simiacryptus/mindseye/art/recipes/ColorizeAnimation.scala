@@ -128,7 +128,7 @@ class ColorizeAnimation extends ArtSetup[Object] {
       }
 
       withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
             (1 to numSteps).map(step => s"step $step" -> {
               new VisualStyleNetwork(

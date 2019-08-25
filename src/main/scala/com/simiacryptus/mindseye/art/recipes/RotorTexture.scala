@@ -90,7 +90,7 @@ class RotorTexture extends RotorArt {
       }
 
       withMonitoredJpg(() => Option(canvas.get()).map(x => renderingFn(x.getDimensions()).eval(x).getDataAndFree.getAndFree(0)).map(_.toRgbImage).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paint("", initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(
               styleLayers = List(

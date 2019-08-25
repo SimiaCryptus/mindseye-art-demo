@@ -59,7 +59,7 @@ object RotorStylePainting extends RotorStylePainting with LocalRunner[Object] wi
 
 class RotorStylePainting extends RotorArt {
   //  override lazy val rotationalChannelPermutation: Array[Int] = Array(-3, -1, -2)
-  override lazy val rotationalChannelPermutation: Array[Int] = Array(1, 2, 3)
+  override val rotationalChannelPermutation: Array[Int] = Array(1, 2, 3)
   override val rotationalSegments: Int = 6
   val contentUrl =
     "file:///C:/Users/andre/Downloads/pictures/40fe5e10-1448-45f8-89ae-90ffacb30b7d.jpeg"
@@ -95,7 +95,7 @@ class RotorStylePainting extends RotorArt {
       withMonitoredJpg(() => Option(canvas.get()).map(tensor => {
         renderingFn(tensor.getDimensions).eval(tensor).getDataAndFree.getAndFree(0).toRgbImage
       }).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleContentNetwork(
               styleLayers = List(

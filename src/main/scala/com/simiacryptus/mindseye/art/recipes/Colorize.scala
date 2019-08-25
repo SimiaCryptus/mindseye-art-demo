@@ -122,7 +122,7 @@ class Colorize extends ArtSetup[Object] {
       }
 
       withMonitoredJpg(() => Option(canvas.get()).map(_.toRgbImage).orNull) {
-        log.subreport(UUID.randomUUID().toString, (sub: NotebookOutput) => {
+        log.subreport("Painting", (sub: NotebookOutput) => {
 
           paint(contentUrl, initUrl, canvas, sub.eval(() => {
             new VisualStyleNetwork(

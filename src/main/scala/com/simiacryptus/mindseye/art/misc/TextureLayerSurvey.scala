@@ -26,7 +26,7 @@ import com.simiacryptus.aws.exe.EC2NodeSettings
 import com.simiacryptus.mindseye.art.models.{VGG16, VGG19}
 import com.simiacryptus.mindseye.art.ops.GramMatrixMatcher
 import com.simiacryptus.mindseye.art.util.ArtUtil._
-import com.simiacryptus.mindseye.art.util.{ArtSetup, Plasma, ImageArtUtil}
+import com.simiacryptus.mindseye.art.util.{ArtSetup, ImageArtUtil, Plasma}
 import com.simiacryptus.mindseye.art.{TiledTrainable, VisionPipeline, VisionPipelineLayer}
 import com.simiacryptus.mindseye.lang.cudnn.{MultiPrecision, Precision}
 import com.simiacryptus.mindseye.lang.{Layer, Tensor}
