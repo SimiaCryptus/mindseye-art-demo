@@ -160,7 +160,7 @@
         </dependency>
         <dependency>
             <groupId>com.simiacryptus</groupId>
-            <artifactId>deepart.studio</artifactId>
+            <artifactId>deepartist.org</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
