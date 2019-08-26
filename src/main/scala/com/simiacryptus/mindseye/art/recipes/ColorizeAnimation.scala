@@ -96,7 +96,7 @@ class ColorizeAnimation extends ArtSetup[Object] {
     log.out(log.jpg(ImageArtUtil.load(log, styleUrl, 600), "Input Style"))
     log.out(log.jpg(ImageArtUtil.load(log, contentUrl, 600), "Reference Content"))
     val canvases = (1 to numSteps).map(_ => new AtomicReference[Tensor](null)).toList
-    val registration = registerWithIndexGIF2(canvases.map(_.get()))
+    val registration = registerWithIndexGIF_Cyclic(canvases.map(_.get()))
     try {
       lazy val decolorModel: Layer = {
         val layer = new ConvolutionLayer(1, 1, 3, 1)

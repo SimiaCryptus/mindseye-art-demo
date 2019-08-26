@@ -104,7 +104,7 @@ class RotorAnimation extends RotorArt {
       transformed
     })
 
-    val registration = registerWithIndexGIF2(renderedCanvases)
+    val registration = registerWithIndexGIF_Cyclic(renderedCanvases)
     try {
       val calcFn: Seq[Int] => PipelineNetwork = dims => {
         val padding = 0 // Math.min(256, Math.max(16, dims(0) / 2))
