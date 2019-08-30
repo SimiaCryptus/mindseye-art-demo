@@ -94,7 +94,7 @@ class StyleAnimation extends ArtSetup[Object] {
     try {
       withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
+          paintEveryOther(contentUrl, initUrl, canvases, sub.eval(() => {
             (1 to numSteps).map(step => s"step $step" -> {
               new VisualStyleNetwork(
                 styleLayers = List(
@@ -133,12 +133,12 @@ class StyleAnimation extends ArtSetup[Object] {
               )), List(
                 new ContentMatcher().scale(1e0)
               ))
-            })
+            }).toList
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 90
             override val trainingIterations: Int = 20
             override val maxRate = 1e9
-          }, _ => new PipelineNetwork(1), transitions, new GeometricSequence {
+          }, _ => new PipelineNetwork(1), new GeometricSequence {
             override val min: Double = 400
             override val max: Double = 1024
             override val steps = 3

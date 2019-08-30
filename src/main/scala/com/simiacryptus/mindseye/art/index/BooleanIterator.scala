@@ -118,7 +118,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
 
     var precision = Precision.Double
     val visionLayer = VGG19_1e1
-    val dim = visionLayer.getOutputChannels
+    val dim = 512
 
     val index = sparkSession.read.parquet(archiveUrl).cache()
     index.printSchema()

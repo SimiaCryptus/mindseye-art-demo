@@ -118,7 +118,7 @@ class RotorAnimation extends RotorArt {
         cyclicalAnimation(renderedCanvases)
       }) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paintBisection("", initUrl, canvases, sub.eval(() => {
+          paintEveryOther("", initUrl, canvases, sub.eval(() => {
             (1 to (transitions * 2 + 1)).map(step => f"step = $step%d" -> {
               var visualStyle: VisualNetwork = new VisualStyleNetwork(
                 styleLayers = List(
@@ -179,7 +179,7 @@ class RotorAnimation extends RotorArt {
                 viewLayer = calcFn
               )
               visualStyle
-            })
+            }).toList
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 60
             override val trainingIterations: Int = 30
@@ -188,7 +188,7 @@ class RotorAnimation extends RotorArt {
             override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
 
             override def trustRegion(layer: Layer): RangeConstraint = null
-          }, renderingFn, transitions, new GeometricSequence {
+          }, renderingFn, new GeometricSequence {
             override val min: Double = 240
             override val max: Double = 1024
             override val steps = 4

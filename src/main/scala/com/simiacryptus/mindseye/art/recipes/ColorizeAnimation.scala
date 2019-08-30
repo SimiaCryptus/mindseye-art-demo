@@ -129,7 +129,7 @@ class ColorizeAnimation extends ArtSetup[Object] {
 
       withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
+          paintEveryOther(contentUrl, initUrl, canvases, sub.eval(() => {
             (1 to numSteps).map(step => s"step $step" -> {
               new VisualStyleNetwork(
                 styleLayers = List(
@@ -188,12 +188,12 @@ class ColorizeAnimation extends ArtSetup[Object] {
                 ),
                 viewLayer = networkFn
               )
-            })
+            }).toList
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 90
             override val trainingIterations: Int = 30
             override val maxRate = 1e9
-          }, _ => new PipelineNetwork(1), transitions, new GeometricSequence {
+          }, _ => new PipelineNetwork(1), new GeometricSequence {
             override val min: Double = 512
             override val max: Double = 1024
             override val steps = 3

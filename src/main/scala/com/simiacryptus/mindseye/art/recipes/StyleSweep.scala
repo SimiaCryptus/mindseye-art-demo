@@ -93,7 +93,7 @@ class StyleSweep extends ArtSetup[Object] {
     try {
       NotebookRunner.withMonitoredGif(() => cyclicalAnimation(canvases.map(_.get()))) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paintBisection(contentUrl, initUrl, canvases, sub.eval(() => {
+          paintEveryOther(contentUrl, initUrl, canvases, sub.eval(() => {
             new GeometricSequence {
               override val min = 1e-1
               override val max = 1e1
@@ -136,12 +136,12 @@ class StyleSweep extends ArtSetup[Object] {
               )), List(
                 new ContentMatcher().scale(contentCoeff)
               ))
-            })
+            }).toList
           }), new BasicOptimizer {
             override val trainingMinutes: Int = 90
             override val trainingIterations: Int = 20
             override val maxRate = 1e9
-          }, _ => new PipelineNetwork(1), 1, new GeometricSequence {
+          }, _ => new PipelineNetwork(1), new GeometricSequence {
             override val min: Double = 400
             override val max: Double = 1024
             override val steps = 3
