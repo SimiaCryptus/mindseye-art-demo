@@ -206,7 +206,6 @@ class ColorizeAnimation extends ArtSetup[Object] {
     finally {
       registration.foreach(_.stop()(s3client, ec2client))
     }
-
   }
 
   def numSteps = transitions * 2 + 1
