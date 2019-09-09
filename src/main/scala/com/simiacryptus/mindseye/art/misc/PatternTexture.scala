@@ -248,7 +248,7 @@ abstract class PatternTexture extends ArtSetup[Object] {
     //Inc5H_5a,
     //Inc5H_5b,
 
-    //    VGG16_0,
+    //    VGG16_0b,
     //    VGG16_1a,
     //    VGG16_1b1,
     //    VGG16_1b2,
