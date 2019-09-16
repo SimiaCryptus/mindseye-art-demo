@@ -255,8 +255,6 @@
     <orderEntry type="library" name="Maven: org.sonatype.plexus:plexus-cipher:1.7" level="project" />
     <orderEntry type="library" name="Maven: org.jblas:jblas:1.2.4" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcudnn:10.0.0" level="project" />
-    <orderEntry type="library" name="Maven: org.jcuda:jcuda:10.0.0" level="project" />
-    <orderEntry type="library" name="Maven: org.jcuda:jcuda-natives:windows-x86_64:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcublas:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcublas-natives:windows-x86_64:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.jcuda:jcudnn-natives:windows-x86_64:10.0.0" level="project" />
@@ -270,6 +268,12 @@
     <orderEntry type="library" name="Maven: org.tensorflow:libtensorflow:1.13.1" level="project" />
     <orderEntry type="library" name="Maven: org.tensorflow:libtensorflow_jni_gpu:1.13.1" level="project" />
     <orderEntry type="library" name="Maven: com.google.protobuf:protobuf-java:3.5.1" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcusparse:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcuda:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcuda-natives:windows-x86_64:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcusparse-natives:windows-x86_64:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcusolver:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jcuda:jcusolver-natives:windows-x86_64:10.0.0" level="project" />
     <orderEntry type="library" name="Maven: org.bytedeco:javacpp:1.4.4" level="project" />
     <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5-platform:1.10.4-1.4.4" level="project" />
     <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:linux-x86:1.10.4-1.4.4" level="project" />
