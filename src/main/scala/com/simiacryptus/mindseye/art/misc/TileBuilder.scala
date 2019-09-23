@@ -358,6 +358,13 @@ abstract class TileBuilder extends ArtSetup[Object] {
     selectRegion(img, positionX, positionY, width, height)
   }
 
+  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
+    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
+    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
+    tileSelectLayer.freeRef()
+    result
+  }
+
   def selectTop(img: BufferedImage, size: Int) = {
     val positionX = 0
     val positionY = 0
@@ -380,13 +387,6 @@ abstract class TileBuilder extends ArtSetup[Object] {
     val width = size
     val height = img.getHeight
     selectRegion(img, positionX, positionY, width, height)
-  }
-
-  def selectRegion(img: BufferedImage, positionX: Int, positionY: Int, width: Int, height: Int) = {
-    val tileSelectLayer = new ImgTileSelectLayer(width, height, positionX, positionY)
-    val result = tileSelectLayer.eval(Tensor.fromRGB(img)).getDataAndFree.getAndFree(0)
-    tileSelectLayer.freeRef()
-    result
   }
 
 }

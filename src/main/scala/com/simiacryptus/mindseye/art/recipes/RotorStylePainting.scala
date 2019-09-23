@@ -96,7 +96,7 @@ class RotorStylePainting extends RotorArt {
         renderingFn(tensor.getDimensions).eval(tensor).getDataAndFree.getAndFree(0).toRgbImage
       }).orNull) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paint(contentUrl, initUrl, canvas, sub.eval(() => {
+          paint(contentUrl, (contentTensor: Tensor) => ArtUtil.load(contentTensor, initUrl), canvas, sub.eval(() => {
             new VisualStyleContentNetwork(
               styleLayers = List(
                 //                VGG19_1a,
@@ -151,18 +151,17 @@ class RotorStylePainting extends RotorArt {
               //              magnification = 1,
               //              viewLayer = renderingFn
             )
-          })
-            , new BasicOptimizer {
-              override val trainingMinutes: Int = 90
-              override val trainingIterations: Int = 30
-              override val maxRate = 1e9
+          }), new BasicOptimizer {
+            override val trainingMinutes: Int = 90
+            override val trainingIterations: Int = 30
+            override val maxRate = 1e9
 
-              override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
-            }, new GeometricSequence {
-              override val min: Double = 200
-              override val max: Double = 1800
-              override val steps = 5
-            }.toStream, renderingFn = renderingFn)(sub)
+            override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
+          }, new GeometricSequence {
+            override val min: Double = 200
+            override val max: Double = 1800
+            override val steps = 5
+          }.toStream, renderingFn = renderingFn)(sub)
           null
         })
       }(log)
