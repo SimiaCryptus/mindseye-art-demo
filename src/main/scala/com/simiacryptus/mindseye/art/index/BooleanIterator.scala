@@ -351,7 +351,7 @@ abstract class BooleanIterator extends ArtSetup[Object] with BasicOptimizer {
         new ProductInputsLayer(),
         PipelineNetwork.combine(
           new SumInputsLayer(),
-          new GramMatrixMatcher().buildWithModel(visionNetwork, covarianceSignal.addRef()),
+          new GramMatrixMatcher().buildWithModel(visionNetwork, null, covarianceSignal.addRef()),
           new ChannelMeanMatcher().buildWithModel(visionNetwork, meanSignal)
         ).andThenWrap(new LinearActivationLayer().setBias(signalMatchBias)),
         network
