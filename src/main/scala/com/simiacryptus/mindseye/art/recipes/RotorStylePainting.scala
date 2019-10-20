@@ -96,72 +96,75 @@ class RotorStylePainting extends RotorArt {
         renderingFn(tensor.getDimensions).eval(tensor).getDataAndFree.getAndFree(0).toRgbImage
       }).orNull) {
         log.subreport("Painting", (sub: NotebookOutput) => {
-          paint(contentUrl, (contentTensor: Tensor) => ArtUtil.load(contentTensor, initUrl), canvas, sub.eval(() => {
-            new VisualStyleContentNetwork(
-              styleLayers = List(
-                //                VGG19_1a,
-                VGG19_1b1,
-                VGG19_1b2,
-                VGG19_1c1,
-                VGG19_1c2,
-                VGG19_1c3,
-                VGG19_1c4,
-                VGG19_1d1,
-                VGG19_1d2,
-                VGG19_1d3,
-                VGG19_1d4
-              ).flatMap(baseLayer => List(
-                baseLayer,
-                baseLayer.prependAvgPool(2)
-                //                baseLayer.prependAvgPool(3)
+          paint(
+            contentUrl = contentUrl,
+            initFn = (contentTensor: Tensor) => ArtUtil.load(contentTensor, initUrl),
+            canvas = canvas,
+            network = sub.eval(() => {
+              new VisualStyleContentNetwork(
+                styleLayers = List(
+                  //                VGG19_1a,
+                  VGG19_1b1,
+                  VGG19_1b2,
+                  VGG19_1c1,
+                  VGG19_1c2,
+                  VGG19_1c3,
+                  VGG19_1c4,
+                  VGG19_1d1,
+                  VGG19_1d2,
+                  VGG19_1d3,
+                  VGG19_1d4
+                ).flatMap(baseLayer => List(
+                  baseLayer,
+                  baseLayer.prependAvgPool(2)
+                  //                baseLayer.prependAvgPool(3)
+                )
+                ),
+                styleModifiers = List(
+                  new GramMatrixEnhancer(),
+                  new MomentMatcher()
+                ),
+                styleUrl = List(styleUrl),
+                magnification = 8,
+                contentLayers = List(
+                  //                VGG19_1b2,
+                  VGG19_1c2,
+                  VGG19_1c4,
+                  VGG19_1d2
+                  //                VGG19_1d4
+                ).flatMap(baseLayer => List(
+                  baseLayer,
+                  baseLayer.prependAvgPool(2)
+                  //                baseLayer.prependAvgPool(3)
+                )
+                ).flatMap(baseLayer => List(
+                  baseLayer.appendMaxPool(2)
+                )
+                ), contentModifiers = List(
+                  new ContentMatcher().scale(5e0)
+                ),
+                viewLayer = renderingFn
+                //            ) + new VisualStyleNetwork(
+                //              styleLayers = List(
+                //                VGG19_0a
+                //              ),
+                //              styleModifiers = List(
+                //                new MomentMatcher()
+                //              ).map(_.scale(1e0)),
+                //              styleUrl = List(contentUrl),
+                //              magnification = 1,
+                //              viewLayer = renderingFn
               )
-              ),
-              styleModifiers = List(
-                new GramMatrixEnhancer(),
-                new MomentMatcher()
-              ),
-              styleUrl = List(styleUrl),
-              magnification = 8,
-              contentLayers = List(
-                //                VGG19_1b2,
-                VGG19_1c2,
-                VGG19_1c4,
-                VGG19_1d2
-                //                VGG19_1d4
-              ).flatMap(baseLayer => List(
-                baseLayer,
-                baseLayer.prependAvgPool(2)
-                //                baseLayer.prependAvgPool(3)
-              )
-              ).flatMap(baseLayer => List(
-                baseLayer.appendMaxPool(2)
-              )
-              ), contentModifiers = List(
-                new ContentMatcher().scale(5e0)
-              ),
-              viewLayer = renderingFn
-              //            ) + new VisualStyleNetwork(
-              //              styleLayers = List(
-              //                VGG19_0a
-              //              ),
-              //              styleModifiers = List(
-              //                new MomentMatcher()
-              //              ).map(_.scale(1e0)),
-              //              styleUrl = List(contentUrl),
-              //              magnification = 1,
-              //              viewLayer = renderingFn
-            )
-          }), new BasicOptimizer {
-            override val trainingMinutes: Int = 90
-            override val trainingIterations: Int = 30
-            override val maxRate = 1e9
-
-            override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
-          }, new GeometricSequence {
-            override val min: Double = 200
-            override val max: Double = 1800
-            override val steps = 5
-          }.toStream, renderingFn = renderingFn)(sub)
+            }), optimizer = new BasicOptimizer {
+              override val trainingMinutes: Int = 90
+              override val trainingIterations: Int = 30
+              override val maxRate = 1e9
+              override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
+            }, renderingFn = renderingFn, resolutions = new GeometricSequence {
+              override val min: Double = 200
+              override val max: Double = 1800
+              override val steps = 5
+            }.toStream)(sub)
           null
         })
       }(log)

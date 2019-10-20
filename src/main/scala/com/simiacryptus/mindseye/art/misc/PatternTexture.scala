@@ -147,7 +147,7 @@ abstract class PatternTexture extends ArtSetup[Object] {
               sub.h2("Result")
               styleTransfer(
                 precision = precision(res),
-                styleImage = loadStyles,
+                styleImages = loadStyles,
                 patternImages = loadPatterns,
                 canvasImage = canvas
               )(sub)
@@ -182,7 +182,7 @@ abstract class PatternTexture extends ArtSetup[Object] {
     styles.toArray
   }
 
-  def styleTransfer(precision: Precision, styleImage: Seq[Tensor], patternImages: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
+  def styleTransfer(precision: Precision, styleImages: Seq[Tensor], patternImages: Seq[Tensor], canvasImage: Tensor)(implicit log: NotebookOutput) = {
     val styleOperator = new GramMatrixMatcher().setTileSize(tileSize).scale(styleMatchCoeff).combine(new GramMatrixEnhancer().setTileSize(tileSize).scale(styleEnhancement(canvasImage.getDimensions()(0))))
     val colorOperator = new ChannelMeanMatcher().combine(new GramMatrixMatcher().setTileSize(tileSize).scale(1e-1)).scale(colorCoeff)
     val patternOperator = new PatternPCAMatcher().scale(patternCoeff)
@@ -192,11 +192,8 @@ abstract class PatternTexture extends ArtSetup[Object] {
     val borderedPatterns = patternImages.map(patternImage => viewLayer.eval(patternImage).getDataAndFree.getAndFree(0))
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
-      val styleNetwork = SumInputsLayer.combine((
-        patternImages.map(patternImage => colorOperator.build(patternImage)).toList ++
-          pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*))
-          ++ pipelineStyleLayers.flatMap(pipelineStyleLayer => borderedPatterns.map(patternImage => patternOperator.build(pipelineStyleLayer, patternImage)))
-        ): _*)
+      val styleNetwork = SumInputsLayer.combine(List(colorOperator.build(VisionPipelineLayer.NOOP, null, null, patternImages: _*)) ++
+        pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, null, null, styleImages: _*)): _*)
       //TestUtil.graph(log, styleNetwork)
       new TiledTrainable(canvasImage, viewLayer, tileSize, tilePadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {

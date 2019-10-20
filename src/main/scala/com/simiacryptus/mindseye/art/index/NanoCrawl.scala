@@ -102,7 +102,7 @@ trait NanoCrawl extends InteractiveSetup[Object] with NotebookRunner[Object] wit
         case "text/html" =>
           getLinks(url, textSrc)
         case other =>
-          logger.debug(s"Cannot handle content type $other")
+          logger.debug(s"Cannot handle mask type $other")
           List.empty
       })
     } catch {

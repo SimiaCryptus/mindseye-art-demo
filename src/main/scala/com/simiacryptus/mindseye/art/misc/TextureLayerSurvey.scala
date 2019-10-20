@@ -108,7 +108,7 @@ abstract class TextureLayerSurvey extends ArtSetup[Object] {
     val operator = new GramMatrixMatcher()
     val styleNetwork: PipelineNetwork = log.eval(() => {
       MultiPrecision.setPrecision(SumInputsLayer.combine(
-        operator.build(layer, styleImage)
+        operator.build(layer, null, null, styleImage)
       ), precision).freeze().asInstanceOf[PipelineNetwork]
     })
     val trainable = new TiledTrainable(contentImage, tileSize, tilePadding, precision) {

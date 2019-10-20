@@ -260,8 +260,8 @@ abstract class TileBuilder extends ArtSetup[Object] {
     val trainable = new SumTrainable((styleLayers.groupBy(_.getPipelineName).values.toList.map(pipelineLayers => {
       val pipelineStyleLayers = pipelineLayers.filter(x => styleLayers.contains(x))
       val styleNetwork = SumInputsLayer.combine((
-        pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, styleImage: _*)) ++ List(
-          colorOperator.build(colorImage: _*)
+        pipelineStyleLayers.map(pipelineStyleLayer => styleOperator.build(pipelineStyleLayer, null, null, styleImage: _*)) ++ List(
+          colorOperator.build(VisionPipelineLayer.NOOP, null, null, colorImage: _*)
         )): _*)
       new TiledTrainable(canvasImage, borderLayer, currentTileSize, tiledEvaluationPadding, precision) {
         override protected def getNetwork(regionSelector: Layer): PipelineNetwork = {

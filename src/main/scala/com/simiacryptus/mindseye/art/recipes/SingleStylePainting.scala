@@ -55,7 +55,7 @@ object SingleStylePaintingEC2 extends SingleStylePainting with EC2Runner[Object]
 object SingleStylePainting extends SingleStylePainting with LocalRunner[Object] with NotebookRunner[Object]
 
 class SingleStylePainting extends ArtSetup[Object] {
-  val contentUrl = "upload:content"
+  val contentUrl = "upload:mask"
   val styleUrl = "upload:style"
   val initUrl: String = "50 + noise * 50"
   val s3bucket: String = ""
