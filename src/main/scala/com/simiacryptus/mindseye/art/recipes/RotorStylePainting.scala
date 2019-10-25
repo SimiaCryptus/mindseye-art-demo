@@ -159,6 +159,7 @@ class RotorStylePainting extends RotorArt {
               override val trainingMinutes: Int = 90
               override val trainingIterations: Int = 30
               override val maxRate = 1e9
+
               override def renderingNetwork(dims: Seq[Int]): PipelineNetwork = renderingFn(dims)
             }, renderingFn = renderingFn, resolutions = new GeometricSequence {
               override val min: Double = 200
