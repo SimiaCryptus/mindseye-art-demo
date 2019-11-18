@@ -38,9 +38,9 @@
     <orderEntry type="library" name="Maven: com.google.code.findbugs:jsr305:3.0.2" level="project" />
     <orderEntry type="library" name="Maven: org.json:json:20180813" level="project" />
     <orderEntry type="library" name="Maven: de.javakaffee:kryo-serializers:0.45" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.9.9" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.9.9" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.9.9" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.10.0" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.10.0" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.10.0" level="project" />
     <orderEntry type="module" module-name="aws-utilities" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-ec2:1.11.495" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:jmespath-java:1.11.495" level="project" />
@@ -185,7 +185,7 @@
     <orderEntry type="library" name="Maven: com.fasterxml.woodstox:woodstox-core:5.0.3" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-codecommit:1.11.495" level="project" />
     <orderEntry type="module" module-name="mindseye-core" />
-    <orderEntry type="library" name="Maven: com.simiacryptus:refcount-core:1.8.1" level="project" />
+    <orderEntry type="module" module-name="refcount-core" />
     <orderEntry type="module" module-name="mindseye-cudnn" />
     <orderEntry type="module" module-name="mindseye-java" />
     <orderEntry type="module" module-name="mindseye-test" />
@@ -282,8 +282,8 @@
     <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:windows-x86_64:1.10.4-1.4.4" level="project" />
     <orderEntry type="library" name="Maven: org.bytedeco.javacpp-presets:hdf5:1.10.4-1.4.4" level="project" />
     <orderEntry type="module" module-name="sparkbook" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-scala_2.11:2.9.9" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-paranamer:2.9.9" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-scala_2.11:2.10.0" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.module:jackson-module-paranamer:2.10.0" level="project" />
     <orderEntry type="library" name="Maven: org.scala-lang:scala-reflect:2.11.12" level="project" />
     <orderEntry type="library" name="Maven: org.lz4:lz4-java:1.5.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-hive_2.11:2.4.0" level="project" />
