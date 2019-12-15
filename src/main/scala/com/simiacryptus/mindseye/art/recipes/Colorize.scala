@@ -117,7 +117,7 @@ class Colorize extends ArtSetup[Object] {
 
       def networkFn(dims: Seq[Int]): PipelineNetwork = {
         PipelineNetwork.wrap(1,
-          decolorModel, recolorModel.addRef(), new BoundedActivationLayer().setMinValue(0).setMaxValue(255)
+          decolorModel, recolorModel.addRef().asInstanceOf[Layer], new BoundedActivationLayer().setMinValue(0).setMaxValue(255)
         )
       }
 
